@@ -1,0 +1,60 @@
+{
+  "eventTicker": "KXBTCD-26SEP0620",
+  "seriesTicker": "KXBTCD",
+  "port": 8787,
+  "model": {
+    "volSource": "blend",
+    "volLookbackMinutes": 720,
+    "ewmaHalfLifeMinutes": 90,
+    "blendWeightRealized": 0.35,
+    "volFloorAnnualPct": 15,
+    "volCeilingAnnualPct": 250
+  },
+  "fees": {
+    "tradingFeeRate": 0.07,
+    "makerFeeRate": 0,
+    "settlementFeePerContract": 0
+  },
+  "ranking": {
+    "weightEdge": 0.4,
+    "weightSafety": 0.35,
+    "weightLiquidity": 0.15,
+    "weightKelly": 0.1,
+    "minVolume": 200,
+    "minOpenInterest": 100,
+    "maxSpreadCents": 4
+  },
+  "auto": {
+    "mode": "full",
+    "dryRun": true,
+    "suggestionTtlSeconds": 45,
+    "maxPendingSuggestions": 1,
+    "minEdge": 0.06,
+    "minModelProb": 0.8,
+    "minScore": 60,
+    "maxContractsPerOrder": 10,
+    "maxNotionalPerOrder": 25,
+    "maxOpenNotionalTotal": 100,
+    "maxOrdersPerHour": 4,
+    "minSecondsToClose": 300,
+    "maxSecondsToClose": 43200,
+    "kellyFraction": 0.25,
+    "allowedSides": [
+      "yes",
+      "no"
+    ],
+    "cooldownSecondsPerMarket": 600
+  },
+  "credentials": {
+    "apiKeyId": "",
+    "privateKeyPath": "kalshi-private-key.pem",
+    "environment": "prod",
+    "observacao": "as credenciais reais ficam em credentials.json, que nao vai para o controle de versao"
+  },
+  "pollIntervalMs": 750,
+  "autoCheckSeconds": 10,
+  "capital": {
+    "inicial": 3.4,
+    "atual": 3.88
+  }
+}

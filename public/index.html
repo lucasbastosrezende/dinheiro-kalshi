@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Painel de Apostas — Bitcoin na Kalshi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot" id="liveDot"></span>
+    <h1>Apostas no Bitcoin <small id="eventTicker">—</small></h1>
+  </div>
+  <button class="btn primary" id="openPicker">Escolher aposta ▾</button>
+  <button class="btn" id="openCapital">Capital 💰</button>
+  <div class="topstats">
+    <div class="stat" id="capitalStat">
+      <label>Valorização do capital</label>
+      <strong id="capitalPct">—</strong>
+      <span id="capitalDetail">defina seu capital inicial e atual</span>
+    </div>
+    <div class="stat"><label>Tipo de aposta</label><strong id="tipoAposta">—</strong><span id="tipoApostaDetalhe"></span></div>
+    <div class="stat"><label>Preço do Bitcoin</label><strong id="spot">—</strong><span id="spotSource"></span></div>
+    <div class="stat"><label>Encerra em</label><strong id="countdown">—</strong><span id="closeTime"></span></div>
+    <div class="stat"><label>Oscilação do Bitcoin</label><strong id="volUsed">—</strong><span id="volDetail"></span></div>
+    <div class="stat"><label>Palpite do mercado</label><strong id="impliedMedian">—</strong><span>preço mais provável</span></div>
+    <div class="stat"><label>Variação normal</label><strong id="sigmaDollars">—</strong><span>até o encerramento</span></div>
+  </div>
+  <div class="topactions">
+    <div class="stat live">
+      <label>Ao vivo</label>
+      <strong id="liveLabel">conectando...</strong>
+      <span id="liveDetail"></span>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="resumo">Resumo</button>
+  <button class="tab" data-tab="ranking">Melhores apostas</button>
+  <button class="tab" data-tab="mercados">Todas as faixas</button>
+  <button class="tab" data-tab="curva">Gráficos</button>
+  <button class="tab" data-tab="arb">Lucro garantido</button>
+  <button class="tab" data-tab="auto">Apostar sozinho</button>
+  <button class="tab" data-tab="config">Ajustes</button>
+</nav>
+
+<main>
+  <div id="avisoModelo" class="warn hidden" style="margin-bottom:14px"></div>
+
+  <!-- RESUMO -->
+  <section id="tab-resumo" class="panel active">
+    <div class="cards" id="summaryCards"></div>
+    <div class="grid2">
+      <div class="card">
+        <h2>As 5 mais seguras</h2>
+        <p class="hint">As que têm maior chance de dar certo. Ganham pouco, mas erram pouco.</p>
+        <div id="topSafe" class="minilist"></div>
+      </div>
+      <div class="card">
+        <h2>As 5 que mais valem a pena</h2>
+        <p class="hint">As que dão o melhor retorno para o risco que você corre, já com as taxas descontadas.</p>
+        <div id="topProfit" class="minilist"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Como funciona esta aposta</h2>
+      <p id="howItWorks" class="rules"></p>
+      <h2 style="margin-top:14px">Regra oficial (tradução)</h2>
+      <p id="rulesPt" class="rules"></p>
+      <p id="rules" class="rules" style="opacity:.55;font-size:11px"></p>
+    </div>
+  </section>
+
+  <!-- RANKING -->
+  <section id="tab-ranking" class="panel">
+    <div class="toolbar">
+      <label>Colocar em ordem de
+        <select id="rankSort">
+          <option value="score">Nota geral</option>
+          <option value="safety">Mais segura</option>
+          <option value="evPct">Melhor retorno</option>
+          <option value="edge">Maior vantagem sobre o mercado</option>
+          <option value="kelly">Quanto apostar</option>
+          <option value="grossReturnPct">Quanto paga se acertar</option>
+        </select>
+      </label>
+      <label>Tipo de aposta
+        <select id="rankSide"><option value="all">As duas</option><option value="yes">Só "vai passar"</option><option value="no">Só "não vai passar"</option></select>
+      </label>
+      <label class="switch-inline"><input type="checkbox" id="onlyEligible" checked /> esconder as com pouca gente negociando</label>
+      <label class="switch-inline"><input type="checkbox" id="onlyPositiveEv" /> só as que valem a pena</label>
+      <span class="spacer"></span>
+      <span id="rankCount" class="muted"></span>
+    </div>
+    <div class="tablewrap"><table id="rankTable" class="data"></table></div>
+    <p class="hint">Todos os números já descontam a taxa que a Kalshi cobra em cada negociação. Passe o mouse no cabeçalho de cada coluna para ver o que ela significa.</p>
+  </section>
+
+  <!-- MERCADOS -->
+  <section id="tab-mercados" class="panel">
+    <div class="toolbar">
+      <input id="filterStrike" type="search" placeholder="procurar por preço-alvo..." />
+      <label class="switch-inline"><input type="checkbox" id="hideDead" checked /> esconder faixas paradas</label>
+      <span class="spacer"></span>
+      <span id="marketCount" class="muted"></span>
+    </div>
+    <p class="hint">Clique em qualquer linha para ver o detalhe da faixa, com as ofertas de compra e venda ao vivo.</p>
+    <div class="tablewrap"><table id="marketTable" class="data"></table></div>
+    <div id="marketDetail" class="card hidden"></div>
+  </section>
+
+  <!-- GRAFICOS -->
+  <section id="tab-curva" class="panel">
+    <div class="card">
+      <h2>O que o mercado acha × o que a conta diz</h2>
+      <p class="hint">A linha azul é a chance que o mercado dá para o Bitcoin ficar acima de cada preço. A linha roxa é a chance calculada aqui. Onde as duas se afastam, pode haver uma aposta boa.</p>
+      <div id="chartCurve" class="chart"></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Onde o mercado acha que o preço vai parar</h2>
+        <p class="hint">Quanto mais alta a barra, mais provável é o Bitcoin encerrar naquela faixa de preço.</p>
+        <div id="chartDensity" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2>Vantagem em cada faixa</h2>
+        <p class="hint">Acima de zero, a conta indica que o "vai passar" está barato. Abaixo de zero, o "não vai passar" é que está barato.</p>
+        <div id="chartEdge" class="chart"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Bitcoin nas últimas 6 horas</h2>
+      <div id="chartBtc" class="chart"></div>
+    </div>
+  </section>
+
+  <!-- LUCRO GARANTIDO -->
+  <section id="tab-arb" class="panel">
+    <div class="card">
+      <h2>Combinações que dão lucro dê no que der</h2>
+      <p class="hint">
+        Às vezes os preços ficam desencontrados e dá para montar uma combinação que rende dinheiro
+        <strong>não importa onde o Bitcoin termine</strong>. Some raro e some rápido: some em segundos e você
+        precisa comprar as duas pontas quase ao mesmo tempo.
+      </p>
+      <div id="arbList"></div>
+    </div>
+  </section>
+
+  <!-- AUTOMATICO -->
+  <section id="tab-auto" class="panel">
+    <div class="card danger-zone">
+      <h2>Como o programa deve agir</h2>
+      <div class="modos">
+        <label class="modo" data-modo="normal">
+          <input type="radio" name="modo" value="normal" checked />
+          <div>
+            <strong>Normal</strong>
+            <span>Só analisa e mostra as melhores apostas. Nunca aposta nada. É assim que ele vem.</span>
+          </div>
+        </label>
+        <label class="modo" data-modo="semi">
+          <input type="radio" name="modo" value="semi" />
+          <div>
+            <strong>Semiautomático</strong>
+            <span>Ele acha a aposta e te mostra o cartão. Só acontece alguma coisa se você clicar em aprovar.</span>
+          </div>
+        </label>
+        <label class="modo perigo" data-modo="full">
+          <input type="radio" name="modo" value="full" />
+          <div>
+            <strong>Totalmente automático</strong>
+            <span>Ele aposta sozinho, sem perguntar. Exige digitar a frase de confirmação e não volta ligado sozinho se o servidor reiniciar.</span>
+          </div>
+        </label>
+      </div>
+
+      <p class="warn">
+        O <strong>modo teste</strong> vem ligado e vale para os três modos: com ele ligado nada é enviado para a
+        Kalshi, nem quando você aprova uma sugestão. Ele só anota o que teria feito. Para valer dinheiro de
+        verdade, sua conta precisa estar cadastrada e você precisa desligar o modo teste digitando a frase de
+        confirmação. O dinheiro é seu e a responsabilidade pelas apostas também.
+      </p>
+
+      <div class="switchrow">
+        <label class="bigswitch">
+          <input type="checkbox" id="autoDryRun" checked />
+          <span>Modo teste (não vale dinheiro)</span>
+        </label>
+        <button class="btn" id="autoRunNow">Procurar uma aposta agora</button>
+      </div>
+      <div id="autoStatus" class="statusbox"></div>
+    </div>
+
+    <div class="card" id="cardSugestoes">
+      <h2>Sugestões esperando você</h2>
+      <p class="hint">Cada sugestão vale por poucos segundos, porque o preço muda. Se vencer, ela some sozinha — e nada é enviado. Ao aprovar, o programa confere o preço de novo e desiste se ele tiver piorado.</p>
+      <div id="sugestoes"></div>
+    </div>
+
+    <div class="card">
+      <h2>Limites de segurança</h2>
+      <p class="hint">O programa só aposta se a aposta passar em <strong>todos</strong> estes limites. Se qualquer um reprovar, ele fica parado.</p>
+      <div class="settings" id="autoSettings"></div>
+      <button class="btn primary" id="saveAuto">Salvar limites</button>
+    </div>
+
+    <div class="card">
+      <h2>O que ele faria agora</h2>
+      <p class="hint">As melhores apostas do momento, com o tamanho que ele usaria e o motivo de ter recusado cada uma.</p>
+      <div class="tablewrap"><table id="previewTable" class="data"></table></div>
+    </div>
+
+    <div class="card">
+      <h2>Tudo o que ele já fez</h2>
+      <div id="autoHistory" class="loglist"></div>
+    </div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section id="tab-config" class="panel">
+    <div class="card">
+      <h2>Como a conta é feita</h2>
+      <div class="settings" id="modelSettings"></div>
+      <button class="btn primary" id="saveConfig">Salvar</button>
+    </div>
+    <div class="card">
+      <h2>Sua conta na Kalshi</h2>
+      <div id="portfolioBox"></div>
+    </div>
+    <div class="card">
+      <h2>O que cada palavra significa</h2>
+      <dl class="glossary">
+        <dt>Faixa / preço-alvo</dt><dd>Cada aposta tem um preço de referência, por exemplo US$ 80.000. Você aposta se o Bitcoin vai encerrar acima ou abaixo dele.</dd>
+        <dt>Vai passar / Não vai passar</dt><dd>As duas apostas possíveis em cada faixa. No site da Kalshi aparecem como "Yes" e "No".</dd>
+        <dt>Preço da aposta</dt><dd>Quanto custa um contrato. Se acertar, ele vale US$ 1,00. Se errar, vale zero. Um contrato a US$ 0,62 é o mercado dizendo que a chance é de 62%.</dd>
+        <dt>Chance do mercado</dt><dd>A chance que as pessoas que estão negociando dão para aquilo acontecer. É o próprio preço, em porcentagem.</dd>
+        <dt>Chance calculada</dt><dd>A chance que a conta deste painel calcula, usando o preço atual do Bitcoin, o tempo que falta e o quanto ele costuma oscilar.</dd>
+        <dt>Vantagem</dt><dd>A diferença entre as duas chances acima. Se a conta diz 70% e o mercado cobra como se fosse 60%, você tem 10 pontos de vantagem.</dd>
+        <dt>Ponto de equilíbrio</dt><dd>A chance mínima de acerto para você não sair no prejuízo, já contando a taxa. Se a chance calculada é maior que ela, a aposta compensa.</dd>
+        <dt>Retorno esperado</dt><dd>Quanto você ganha, em média, para cada real arriscado, se repetisse essa mesma aposta muitas vezes. Negativo quer dizer que, no longo prazo, ela perde dinheiro.</dd>
+        <dt>Paga se acertar</dt><dd>Quanto o dinheiro rende se der certo. Comprar a US$ 0,95 rende 5%; comprar a US$ 0,10 rende 900% — mas raramente dá certo.</dd>
+        <dt>Perde se errar</dt><dd>Sempre tudo o que você colocou. Não existe perda parcial: o contrato vira zero.</dd>
+        <dt>Quanto apostar</dt><dd>A fatia do seu dinheiro que a matemática indica para essa aposta. O painel usa um quarto disso, para não sacudir demais a carteira.</dd>
+        <dt>Distância</dt><dd>O quanto o preço-alvo está longe do preço de agora, medido em "oscilações normais". Distância 2 quer dizer que o Bitcoin precisaria de um movimento duas vezes maior que o normal para chegar lá.</dd>
+        <dt>Diferença compra/venda</dt><dd>A diferença entre o preço de quem quer comprar e o de quem quer vender. Quanto menor, mais fácil entrar e sair sem perder dinheiro.</dd>
+        <dt>Contratos em aberto</dt><dd>Quantos contratos estão vivos naquela faixa. Muitos contratos = mercado movimentado e preço mais confiável.</dd>
+        <dt>Nota de segurança</dt><dd>De 0 a 100. Junta a chance de acerto, a folga sobre o ponto de equilíbrio, a distância do preço-alvo e o movimento do mercado.</dd>
+        <dt>Nota geral</dt><dd>De 0 a 100. Mistura retorno, segurança, movimento do mercado e tamanho recomendado. Os pesos você ajusta aqui em cima.</dd>
+        <dt>Oscilação do Bitcoin</dt><dd>O quanto o Bitcoin costuma balançar. Quanto mais ele balança, mais fácil ele atravessar preços-alvo distantes.</dd>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span id="lastUpdate">—</span>
+  <span class="muted">Isto é um painel de análise, não é conselho de investimento. Aposta errada perde tudo o que você colocou.</span>
+</footer>
+
+<!-- ESCOLHER APOSTA — lista toda aposta de Bitcoin aberta na Kalshi agora. Escolher uma
+     troca a faixa analisada em todas as abas (Resumo, Melhores apostas, Todas as faixas...). -->
+<div id="pickerOverlay" class="picker-overlay hidden">
+  <div class="picker-panel">
+    <div class="picker-head">
+      <div>
+        <h2>Escolher aposta de Bitcoin</h2>
+        <p class="hint" style="margin:2px 0 0">Todas as apostas de BTC abertas na Kalshi agora. Escolha uma para trazer ela para todas as abas.</p>
+      </div>
+      <button class="btn" id="closePicker">Fechar</button>
+    </div>
+    <nav class="boardFilters" id="boardFilters"></nav>
+    <div class="toolbar">
+      <input id="pickerSearch" type="search" placeholder="procurar por nome..." />
+      <span class="spacer"></span>
+      <span id="boardCount" class="muted"></span>
+      <span id="boardUpdated" class="muted"></span>
+    </div>
+    <div class="boardGrid" id="boardGrid"></div>
+  </div>
+</div>
+
+<!-- CAPITAL — quanto você começou e quanto tem agora. A valorização calculada aqui
+     aparece na barra do topo e ajusta todas as estatísticas de resultado do painel. -->
+<div id="capitalOverlay" class="picker-overlay hidden">
+  <div class="picker-panel" style="max-width:420px">
+    <div class="picker-head">
+      <div>
+        <h2>Seu capital</h2>
+        <p class="hint" style="margin:2px 0 0">Diga quanto você começou e quanto tem agora. O painel calcula a valorização e passa a mostrar todo resultado (lucro, retorno, saldo) já ajustado por ela.</p>
+      </div>
+      <button class="btn" id="closeCapital">Fechar</button>
+    </div>
+    <div class="setting"><label>Capital inicial (US$)</label><input type="number" step="0.01" id="capitalInicial" /></div>
+    <div class="setting"><label>Capital atual (US$)</label><input type="number" step="0.01" id="capitalAtual" /></div>
+    <div id="capitalResumo" class="muted" style="margin:10px 0"></div>
+    <button class="btn primary" id="saveCapital">Salvar</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

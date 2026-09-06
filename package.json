@@ -1,0 +1,14 @@
+{
+  "name": "kalshi-btc-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard de analise de mercados Kalshi (BTC acima/abaixo) com ranking de risco/retorno e modo automatico opcional",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}
