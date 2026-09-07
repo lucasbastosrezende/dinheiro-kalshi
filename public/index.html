@@ -3,83 +3,72 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Painel de Apostas — Bitcoin na Kalshi</title>
+<title>Kalshi · Bitcoin Workspace</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
+<a class="skip-link" href="#main">Pular para o conteúdo</a>
+<aside class="sidebar">
+  <a class="identity" href="#" aria-label="Voltar à visão geral"><span class="brandmark">k<span>.</span></span><span>kalshi<span class="brand-caption">BITCOIN WORKSPACE</span></span></a>
+  <div class="nav-label">ACOMPANHAR</div>
+  <nav class="tabs" aria-label="Navegação principal"><button class="tab active" data-tab="resumo" aria-controls="tab-resumo" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Visão geral</span></button><button class="tab " data-tab="ranking" aria-controls="tab-ranking" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18V11m8 7V5m8 13V8"/></svg><span>Oportunidades</span></button><button class="tab " data-tab="mercados" aria-controls="tab-mercados" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg><span>Mercados</span></button><button class="tab " data-tab="curva" aria-controls="tab-curva" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18M6 15l5-6 4 3 6-8"/></svg><span>Análise gráfica</span></button><button class="tab " data-tab="arb" aria-controls="tab-arb" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h15l-4-4m5 14H5l4 4M20 7l-5 4M4 17l5-4"/></svg><span>Arbitragem</span></button><div class="nav-label manage-label">GERENCIAR</div><button class="tab " data-tab="auto" aria-controls="tab-auto" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M12 3v4M8 12v3m8-3v3M9 18h6"/></svg><span>Automação</span></button><button class="tab " data-tab="config" aria-controls="tab-config" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span>Configurações</span></button></nav>
+  <div class="sidebar-bottom"><span class="workspace-mark">₿</span><div>Bitcoin na Kalshi<small>Painel independente de análise</small></div></div>
+</aside>
 <header class="topbar">
-  <div class="brand">
-    <span class="dot" id="liveDot"></span>
-    <h1>Apostas no Bitcoin <small id="eventTicker">—</small></h1>
-  </div>
-  <button class="btn primary" id="openPicker">Escolher aposta ▾</button>
-  <button class="btn" id="openCapital">Capital 💰</button>
-  <div class="topstats">
+  <div class="breadcrumb">Workspace <span>/</span> <strong id="breadcrumbPage">Visão geral</strong></div>
+  <div class="topactions"><span class="dot stale" id="liveDot"></span><div class="stat live"><strong id="liveLabel">Conectando…</strong><span id="liveDetail"></span></div></div>
+  <button class="btn" id="openCapital">Meu capital</button>
+</header>
+
+<main id="main" tabindex="-1">
+  <div class="page-heading"><div><span class="eyebrow">MERCADOS DE BITCOIN</span><h1 id="pageTitle">Visão geral</h1><p id="pageDescription">Entenda o momento do mercado e compare as possibilidades.</p></div><button class="btn primary" id="openPicker">Explorar mercados <span aria-hidden="true">↗</span></button></div>
+  <section class="market-overview" aria-label="Mercado selecionado"><div class="market-heading"><span class="bitcoin-icon">₿</span><div><span class="eyebrow">MERCADO SELECIONADO</span><h2 id="selectedEvent">Aguardando dados do mercado</h2><small id="eventTicker">Conectando à Kalshi…</small></div><span class="market-tag">BTC / USD</span></div>  <div class="topstats">
     <div class="stat" id="capitalStat">
-      <label>Valorização do capital</label>
+      <label>Variação do capital</label>
       <strong id="capitalPct">—</strong>
       <span id="capitalDetail">defina seu capital inicial e atual</span>
     </div>
-    <div class="stat"><label>Tipo de aposta</label><strong id="tipoAposta">—</strong><span id="tipoApostaDetalhe"></span></div>
+    <div class="stat"><label>Tipo de contrato</label><strong id="tipoAposta">—</strong><span id="tipoApostaDetalhe"></span></div>
     <div class="stat"><label>Preço do Bitcoin</label><strong id="spot">—</strong><span id="spotSource"></span></div>
     <div class="stat"><label>Encerra em</label><strong id="countdown">—</strong><span id="closeTime"></span></div>
     <div class="stat"><label>Oscilação do Bitcoin</label><strong id="volUsed">—</strong><span id="volDetail"></span></div>
-    <div class="stat"><label>Palpite do mercado</label><strong id="impliedMedian">—</strong><span>preço mais provável</span></div>
+    <div class="stat"><label>Estimativa do mercado</label><strong id="impliedMedian">—</strong><span>preço mais provável</span></div>
     <div class="stat"><label>Variação normal</label><strong id="sigmaDollars">—</strong><span>até o encerramento</span></div>
-  </div>
-  <div class="topactions">
-    <div class="stat live">
-      <label>Ao vivo</label>
-      <strong id="liveLabel">conectando...</strong>
-      <span id="liveDetail"></span>
-    </div>
-  </div>
-</header>
-
-<nav class="tabs">
-  <button class="tab active" data-tab="resumo">Resumo</button>
-  <button class="tab" data-tab="ranking">Melhores apostas</button>
-  <button class="tab" data-tab="mercados">Todas as faixas</button>
-  <button class="tab" data-tab="curva">Gráficos</button>
-  <button class="tab" data-tab="arb">Lucro garantido</button>
-  <button class="tab" data-tab="auto">Apostar sozinho</button>
-  <button class="tab" data-tab="config">Ajustes</button>
-</nav>
-
-<main>
+  </div></section>
+  <div id="marketEmpty" class="market-empty hidden" role="status"><div><strong>Nenhuma faixa disponível neste evento</strong><p>O evento pode ter encerrado ou os dados ainda não chegaram. Explore os mercados para escolher outro.</p></div><button class="btn" id="emptyPicker">Escolher mercado →</button></div>
   <div id="avisoModelo" class="warn hidden" style="margin-bottom:14px"></div>
 
   <!-- RESUMO -->
   <section id="tab-resumo" class="panel active">
-    <div class="cards" id="summaryCards"></div>
+    <div class="section-heading"><h2>O mercado em números</h2><span>Indicadores do evento selecionado</span></div><div class="cards" id="summaryCards"><div class="empty-state">Carregando indicadores do mercado…</div></div>
     <div class="grid2">
       <div class="card">
-        <h2>As 5 mais seguras</h2>
-        <p class="hint">As que têm maior chance de dar certo. Ganham pouco, mas erram pouco.</p>
-        <div id="topSafe" class="minilist"></div>
+        <h2>Maior chance estimada</h2>
+        <p class="hint">As 5 primeiras por nota de segurança do modelo. A estimativa não garante o resultado.</p>
+        <div id="topSafe" class="minilist"><p class="empty-state">Aguardando as primeiras cotações.</p></div><button class="text-action" data-go="ranking">Comparar oportunidades <span aria-hidden="true">→</span></button>
       </div>
       <div class="card">
-        <h2>As 5 que mais valem a pena</h2>
-        <p class="hint">As que dão o melhor retorno para o risco que você corre, já com as taxas descontadas.</p>
-        <div id="topProfit" class="minilist"></div>
+        <h2>Melhor retorno esperado</h2>
+        <p class="hint">Compare o retorno estimado após as taxas com a chance de cada contrato.</p>
+        <div id="topProfit" class="minilist"><p class="empty-state">Aguardando as primeiras cotações.</p></div><button class="text-action" data-go="ranking">Ver ranking completo <span aria-hidden="true">→</span></button>
       </div>
     </div>
     <div class="card">
-      <h2>Como funciona esta aposta</h2>
+      <h2>Entenda este mercado</h2>
       <p id="howItWorks" class="rules"></p>
-      <h2 style="margin-top:14px">Regra oficial (tradução)</h2>
+      <details class="market-rules"><summary>Critério de resolução e regra original</summary>
       <p id="rulesPt" class="rules"></p>
-      <p id="rules" class="rules" style="opacity:.55;font-size:11px"></p>
+      <p id="rules" class="rules original-rules"></p></details>
     </div>
   </section>
 
   <!-- RANKING -->
   <section id="tab-ranking" class="panel">
     <div class="toolbar">
-      <label>Colocar em ordem de
+      <label>Ordenar por
         <select id="rankSort">
           <option value="score">Nota geral</option>
           <option value="safety">Mais segura</option>
@@ -89,13 +78,14 @@
           <option value="grossReturnPct">Quanto paga se acertar</option>
         </select>
       </label>
-      <label>Tipo de aposta
+      <label>Tipo de contrato
         <select id="rankSide"><option value="all">As duas</option><option value="yes">Só "vai passar"</option><option value="no">Só "não vai passar"</option></select>
       </label>
-      <label class="switch-inline"><input type="checkbox" id="onlyEligible" checked /> esconder as com pouca gente negociando</label>
-      <label class="switch-inline"><input type="checkbox" id="onlyPositiveEv" /> só as que valem a pena</label>
+      <label class="switch-inline"><input type="checkbox" id="onlyEligible" checked /> Liquidez suficiente</label>
+      <label class="switch-inline"><input type="checkbox" id="onlyPositiveEv" /> Retorno esperado positivo</label>
       <span class="spacer"></span>
       <span id="rankCount" class="muted"></span>
+      <label class="switch-inline"><input type="checkbox" id="rankAdvanced" /> Todas as métricas</label>
     </div>
     <div class="tablewrap"><table id="rankTable" class="data"></table></div>
     <p class="hint">Todos os números já descontam a taxa que a Kalshi cobra em cada negociação. Passe o mouse no cabeçalho de cada coluna para ver o que ela significa.</p>
@@ -104,10 +94,11 @@
   <!-- MERCADOS -->
   <section id="tab-mercados" class="panel">
     <div class="toolbar">
-      <input id="filterStrike" type="search" placeholder="procurar por preço-alvo..." />
-      <label class="switch-inline"><input type="checkbox" id="hideDead" checked /> esconder faixas paradas</label>
+      <input id="filterStrike" type="search" placeholder="Buscar preço-alvo…" />
+      <label class="switch-inline"><input type="checkbox" id="hideDead" checked /> Somente faixas ativas</label>
       <span class="spacer"></span>
       <span id="marketCount" class="muted"></span>
+      <label class="switch-inline"><input type="checkbox" id="marketAdvanced" /> Todas as métricas</label>
     </div>
     <p class="hint">Clique em qualquer linha para ver o detalhe da faixa, com as ofertas de compra e venda ao vivo.</p>
     <div class="tablewrap"><table id="marketTable" class="data"></table></div>
@@ -117,13 +108,13 @@
   <!-- GRAFICOS -->
   <section id="tab-curva" class="panel">
     <div class="card">
-      <h2>O que o mercado acha × o que a conta diz</h2>
+      <h2>Probabilidade: mercado e modelo</h2>
       <p class="hint">A linha azul é a chance que o mercado dá para o Bitcoin ficar acima de cada preço. A linha roxa é a chance calculada aqui. Onde as duas se afastam, pode haver uma aposta boa.</p>
       <div id="chartCurve" class="chart"></div>
     </div>
     <div class="grid2">
       <div class="card">
-        <h2>Onde o mercado acha que o preço vai parar</h2>
+        <h2>Distribuição de preços estimada</h2>
         <p class="hint">Quanto mais alta a barra, mais provável é o Bitcoin encerrar naquela faixa de preço.</p>
         <div id="chartDensity" class="chart"></div>
       </div>
@@ -142,11 +133,9 @@
   <!-- LUCRO GARANTIDO -->
   <section id="tab-arb" class="panel">
     <div class="card">
-      <h2>Combinações que dão lucro dê no que der</h2>
+      <h2>Oportunidades de arbitragem</h2>
       <p class="hint">
-        Às vezes os preços ficam desencontrados e dá para montar uma combinação que rende dinheiro
-        <strong>não importa onde o Bitcoin termine</strong>. Some raro e some rápido: some em segundos e você
-        precisa comprar as duas pontas quase ao mesmo tempo.
+        Compare combinações de contratos com diferença favorável de preços. O resultado depende da execução das duas pontas, das taxas e da liquidez disponível.
       </p>
       <div id="arbList"></div>
     </div>
@@ -155,12 +144,12 @@
   <!-- AUTOMATICO -->
   <section id="tab-auto" class="panel">
     <div class="card danger-zone">
-      <h2>Como o programa deve agir</h2>
+      <h2>Modo de operação</h2>
       <div class="modos">
         <label class="modo" data-modo="normal">
           <input type="radio" name="modo" value="normal" checked />
           <div>
-            <strong>Normal</strong>
+            <strong>Somente análise</strong>
             <span>Só analisa e mostra as melhores apostas. Nunca aposta nada. É assim que ele vem.</span>
           </div>
         </label>
@@ -198,7 +187,7 @@
     </div>
 
     <div class="card" id="cardSugestoes">
-      <h2>Sugestões esperando você</h2>
+      <h2>Sugestões para aprovar</h2>
       <p class="hint">Cada sugestão vale por poucos segundos, porque o preço muda. Se vencer, ela some sozinha — e nada é enviado. Ao aprovar, o programa confere o preço de novo e desiste se ele tiver piorado.</p>
       <div id="sugestoes"></div>
     </div>
@@ -211,13 +200,13 @@
     </div>
 
     <div class="card">
-      <h2>O que ele faria agora</h2>
+      <h2>Prévia das operações</h2>
       <p class="hint">As melhores apostas do momento, com o tamanho que ele usaria e o motivo de ter recusado cada uma.</p>
       <div class="tablewrap"><table id="previewTable" class="data"></table></div>
     </div>
 
     <div class="card">
-      <h2>Tudo o que ele já fez</h2>
+      <h2>Histórico de atividades</h2>
       <div id="autoHistory" class="loglist"></div>
     </div>
   </section>
@@ -225,7 +214,7 @@
   <!-- AJUSTES -->
   <section id="tab-config" class="panel">
     <div class="card">
-      <h2>Como a conta é feita</h2>
+      <h2>Parâmetros do modelo</h2>
       <div class="settings" id="modelSettings"></div>
       <button class="btn primary" id="saveConfig">Salvar</button>
     </div>
@@ -234,7 +223,7 @@
       <div id="portfolioBox"></div>
     </div>
     <div class="card">
-      <h2>O que cada palavra significa</h2>
+      <h2>Guia de conceitos</h2>
       <dl class="glossary">
         <dt>Faixa / preço-alvo</dt><dd>Cada aposta tem um preço de referência, por exemplo US$ 80.000. Você aposta se o Bitcoin vai encerrar acima ou abaixo dele.</dd>
         <dt>Vai passar / Não vai passar</dt><dd>As duas apostas possíveis em cada faixa. No site da Kalshi aparecem como "Yes" e "No".</dd>
@@ -269,14 +258,14 @@
   <div class="picker-panel">
     <div class="picker-head">
       <div>
-        <h2>Escolher aposta de Bitcoin</h2>
-        <p class="hint" style="margin:2px 0 0">Todas as apostas de BTC abertas na Kalshi agora. Escolha uma para trazer ela para todas as abas.</p>
+        <h2>Explorar mercados de Bitcoin</h2>
+        <p class="hint" style="margin:2px 0 0">Encontre um mercado e selecione para analisar preços, probabilidades e oportunidades.</p>
       </div>
       <button class="btn" id="closePicker">Fechar</button>
     </div>
     <nav class="boardFilters" id="boardFilters"></nav>
     <div class="toolbar">
-      <input id="pickerSearch" type="search" placeholder="procurar por nome..." />
+      <input id="pickerSearch" type="search" placeholder="Buscar um mercado…" />
       <span class="spacer"></span>
       <span id="boardCount" class="muted"></span>
       <span id="boardUpdated" class="muted"></span>
@@ -296,13 +285,13 @@
       </div>
       <button class="btn" id="closeCapital">Fechar</button>
     </div>
-    <div class="setting"><label>Capital inicial (US$)</label><input type="number" step="0.01" id="capitalInicial" /></div>
-    <div class="setting"><label>Capital atual (US$)</label><input type="number" step="0.01" id="capitalAtual" /></div>
+    <div class="setting"><label>Capital inicial (US$)</label><input type="number" step="0.01" id="capitalInicial" min="0.01" /></div>
+    <div class="setting"><label>Capital atual (US$)</label><input type="number" step="0.01" id="capitalAtual" min="0" /></div>
     <div id="capitalResumo" class="muted" style="margin:10px 0"></div>
     <button class="btn primary" id="saveCapital">Salvar</button>
   </div>
 </div>
 
-<script src="app.js"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

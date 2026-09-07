@@ -165,6 +165,8 @@ function prepararDados(a) {
         ticker: r.ticker,
         strike: r.strike,
         kind: r.kind,
+        floorStrike: r.floorStrike,
+        capStrike: r.capStrike,
         subtitle: r.subtitle,
         modelReliable: r.modelReliable,
         side: l.side,
@@ -232,6 +234,10 @@ function render() {
   if (!a) return;
 
   $('#eventTicker').textContent = a.event.ticker;
+  $('#selectedEvent').textContent = a.event.title || 'Bitcoin · ' + a.event.ticker;
+  const hasMarkets = a.rows.length > 0;
+  const hasClose = a.event.closeTime && Number.isFinite(new Date(a.event.closeTime).getTime());
+  $('#marketEmpty').classList.toggle('hidden', hasMarkets);
 
   // Deixa explícito o formato do contrato, porque ele muda o significado de tudo o que
   // aparece na tela (e a conta por trás).
@@ -241,7 +247,7 @@ function render() {
 
   $('#spot').textContent = alvo(a.spot);
   $('#spotSource').textContent = 'fonte: ' + (a.spotSource || '');
-  $('#closeTime').textContent = new Date(a.event.closeTime).toLocaleString('pt-BR');
+  $('#closeTime').textContent = hasClose ? new Date(a.event.closeTime).toLocaleString('pt-BR') : 'Horário indisponível';
   $('#volUsed').textContent = pct(a.vol.usedAnnual, 0);
   $('#volDetail').textContent = `medida agora ${pct(a.vol.realizedAnnual, 0)} · esperada pelo mercado ${pct(a.vol.impliedAnnual, 0)}`;
   $('#impliedMedian').textContent = a.impliedMedian ? alvo(a.impliedMedian) : '—';
@@ -277,6 +283,14 @@ function render() {
       `usando o índice BRTI da CF Benchmarks — não o preço de uma corretora específica. ` +
       `Se essa média cair dentro da condição da faixa, quem apostou em "vai passar" recebe US$ 1,00 por contrato.`;
   $('#rules').textContent = 'Texto original da Kalshi: ' + a.event.rules;
+  if (!hasMarkets) {
+    $('#tipoAposta').textContent = '—';
+    $('#tipoApostaDetalhe').textContent = 'Sem faixas para analisar';
+    $('#sigmaDollars').textContent = '—';
+    $('#howItWorks').textContent = 'Selecione um evento com faixas disponíveis para consultar as condições dos contratos e as regras de resolução.';
+    $('#rulesPt').textContent = '';
+    $('#rules').textContent = '';
+  }
 
   $('#lastUpdate').textContent =
     'última mudança de preço às ' + new Date(a.generatedAt).toLocaleTimeString('pt-BR') + ` · ${a.totals.markets} faixas de preço`;
@@ -308,6 +322,7 @@ let desenhoAgendado = null;
 const abaAtual = () => (document.querySelector('.tab.active') || {}).dataset?.tab || 'resumo';
 
 function renderPainelVisivel(forcar) {
+  if (!state.analysis) return;
   const agora = performance.now();
   const espera = Math.max(0, 1000 - (agora - ultimoDesenhoPesado));
   if (espera > 0 && !forcar) {
@@ -329,7 +344,8 @@ function renderPainelVisivel(forcar) {
 function tickCountdown() {
   const a = state.analysis;
   if (!a) return;
-  $('#countdown').textContent = fmtDuration(new Date(a.event.closeTime).getTime() - Date.now());
+  const close = a.event.closeTime && new Date(a.event.closeTime).getTime();
+  $('#countdown').textContent = close && Number.isFinite(close) ? fmtDuration(close - Date.now()) : '—';
 
   // Mostra há quanto tempo cada fonte de dado falou pela última vez.
   const desdeRecebido = state.recebidoEm ? (performance.now() - state.recebidoEm) / 1000 : null;
@@ -350,12 +366,12 @@ function renderSummary() {
   const best = a.bestOverall[0];
   const fator = fatorCapital();
   const cards = [
-    { l: 'Faixas de preço', v: t.markets, s: 'apostas disponíveis' },
+    { l: 'Faixas de preço', v: t.markets, s: 'faixas disponíveis no evento' },
     { l: 'Contratos negociados', v: num(t.totalVolume), s: 'movimento total de hoje' },
-    { l: 'Contratos em aberto', v: num(t.totalOpenInterest), s: 'apostas ainda de pé' },
+    { l: 'Contratos em aberto', v: num(t.totalOpenInterest), s: 'contratos ainda ativos' },
     { l: 'Diferença compra/venda', v: sig(t.avgSpreadCents) + ' centavos', s: 'quanto menor, melhor' },
-    { l: 'Apostas que compensam', v: t.positiveEvCount, s: `de ${t.opportunitiesEligible} analisadas` },
-    { l: 'Lucro garantido', v: a.arbitrage.length, s: 'combinações sem risco' },
+    { l: 'Retorno esperado positivo', v: t.positiveEvCount, s: `de ${t.opportunitiesEligible} analisadas` },
+    { l: 'Arbitragem', v: a.arbitrage.length, s: 'combinações identificadas' },
     { l: 'Melhor nota', v: best ? best.score.toFixed(0) : '—', s: best ? `${LADO[best.side].toLowerCase()} de ${alvo(best.strike)}` : '' },
   ];
   if (fator !== 1) {
@@ -371,7 +387,7 @@ function renderSummary() {
       .map(
         (o) => `<div class="row">
       <span class="pill ${o.side}">${LADO[o.side]}</span>
-      <div><div class="name">${alvo(o.strike)}</div>
+      <div><div class="name">${tituloFaixa(o)}</div>
       <div class="sub">custa ${money(o.price)} · chance de ${pct(o.modelProb)} · precisa de ${pct(o.breakevenProb)} para empatar</div></div>
       <div style="text-align:right"><div class="${cls(o.evPct)}">${pct(o.evPct)}</div><div class="sub">retorno</div></div>
       <div style="text-align:right"><div>${o.scores.safety.toFixed(0)}</div><div class="sub">segurança</div></div>
@@ -412,6 +428,7 @@ function th(label, key) {
 
 function renderRanking() {
   const a = state.analysis;
+  if (!a) return;
   const sortKey = $('#rankSort').value;
   const sideF = $('#rankSide').value;
   const onlyEl = $('#onlyEligible').checked;
@@ -458,19 +475,20 @@ function renderRanking() {
       <td>${(o.spread * 100).toFixed(0)} c</td>
       <td>${num(o.volume)}</td>
       <td>${num(o.openInterest)}</td>
-      <td>${scoreBar(o.scores.safety, '#8fbc6a')}</td>
-      <td>${scoreBar(o.score, '#7fb3c9')}</td>
+      <td>${scoreBar(o.scores.safety, '#187354')}</td>
+      <td>${scoreBar(o.score, '#2874a4')}</td>
       <td>${st}</td>
     </tr>`;
     })
     .join('');
 
-  $('#rankTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+  $('#rankTable').innerHTML = head + '<tbody>' + (body || '<tr><td colspan="19" class="empty-state">Nenhum contrato para estes filtros. Ajuste os filtros ou selecione outro mercado.</td></tr>') + '</tbody>';
 }
 
 // ---------- TODAS AS FAIXAS ----------
 function renderMarkets() {
   const a = state.analysis;
+  if (!a) return;
   const f = $('#filterStrike').value.trim().replace(/\D/g, '');
   const hideDead = $('#hideDead').checked;
   let rows = a.rows;
@@ -509,13 +527,13 @@ function renderMarkets() {
       <td>${(r.yesSpread * 100).toFixed(0)} c</td>
       <td>${num(r.volume)}</td><td>${num(r.openInterest)}</td>
       <td><span class="pill ${r.bestSide}">${LADO[r.bestSide]}</span></td>
-      <td>${scoreBar(r.bestScore, '#7fb3c9')}</td>
+      <td>${scoreBar(r.bestScore, '#2874a4')}</td>
     </tr>`;
     })
     .join('');
 
   const table = $('#marketTable');
-  table.innerHTML = head + '<tbody>' + body + '</tbody>';
+  table.innerHTML = head + '<tbody>' + (body || '<tr><td colspan="18" class="empty-state">Nenhuma faixa encontrada. Experimente outro preço-alvo ou evento.</td></tr>') + '</tbody>';
   table.querySelectorAll('tr.clickable').forEach((tr) => tr.addEventListener('click', () => showMarketDetail(tr.dataset.ticker)));
 }
 
@@ -654,6 +672,7 @@ function renderBoard() {
         $$('.tab').forEach((x) => x.classList.remove('active'));
         $$('.panel').forEach((x) => x.classList.remove('active'));
         $('.tab[data-tab="resumo"]').classList.add('active');
+        updatePageHeading('resumo');
         $('#tab-resumo').classList.add('active');
         renderPainelVisivel(true);
       } catch (err) {
@@ -705,14 +724,14 @@ async function showMarketDetail(ticker, silencioso) {
         ${th('Segurança', 'seguranca')}<th title="O quanto essa faixa é movimentada">Movimento</th>${th('Nota', 'nota')}
       </tr></thead><tbody>${legTable}</tbody></table>
     </div>
-    <div class="grid2">${renderSide(levels.yes_dollars, 'Ofertas para "vai passar"', '#8fbc6a')}${renderSide(levels.no_dollars, 'Ofertas para "não passa"', '#d97757')}</div>
+    <div class="grid2">${renderSide(levels.yes_dollars, 'Ofertas para "vai passar"', '#187354')}${renderSide(levels.no_dollars, 'Ofertas para "não passa"', '#b64643')}</div>
     <p class="hint">As ofertas acima se atualizam sozinhas enquanto esta faixa estiver aberta.</p>`;
 }
 
 // ---------- GRAFICOS ----------
 function svgChart(el, { series, xLabel, yFmt, xFmt, yDomain, bars }) {
   const W = el.clientWidth || 700, H = el.clientHeight || 280;
-  const pad = { l: 52, r: 12, t: 12, b: 26 };
+  const pad = { l: 56, r: 24, t: W < 420 ? 48 : 30, b: 48 };
   // O domínio precisa considerar tanto as linhas quanto as barras.
   const all = series.flatMap((s) => s.points).concat(bars ? bars.points : []);
   if (!all.length) { el.innerHTML = '<p class="muted">sem dados</p>'; return; }
@@ -721,7 +740,8 @@ function svgChart(el, { series, xLabel, yFmt, xFmt, yDomain, bars }) {
   // Barras sempre partem do zero; linhas usam o próprio mínimo.
   const yMin = bars ? Math.min(0, ...ys) : Math.min(...ys);
   const y0 = yDomain ? yDomain[0] : yMin, y1 = yDomain ? yDomain[1] : Math.max(...ys);
-  const sx = (v) => pad.l + ((v - x0) / (x1 - x0 || 1)) * (W - pad.l - pad.r);
+  const barInset = bars ? (W - pad.l - pad.r) / Math.max(2, bars.points.length * 2) : 0;
+  const sx = (v) => pad.l + barInset + ((v - x0) / (x1 - x0 || 1)) * (W - pad.l - pad.r - 2 * barInset);
   const sy = (v) => H - pad.b - ((v - y0) / (y1 - y0 || 1)) * (H - pad.t - pad.b);
 
   let g = '';
@@ -730,9 +750,10 @@ function svgChart(el, { series, xLabel, yFmt, xFmt, yDomain, bars }) {
     const y = sy(v);
     g += `<line class="grid" x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}"/><text x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${yFmt(v)}</text>`;
   }
-  for (let i = 0; i <= 5; i++) {
-    const v = x0 + ((x1 - x0) * i) / 5;
-    g += `<text x="${sx(v)}" y="${H - 8}" text-anchor="middle">${xFmt(v)}</text>`;
+  const ticks = W < 500 ? 2 : 5;
+  for (let i = 0; i <= ticks; i++) {
+    const v = x0 + ((x1 - x0) * i) / ticks;
+    g += `<text x="${sx(v)}" y="${H - 27}" text-anchor="${i === 0 ? 'start' : i === ticks ? 'end' : 'middle'}">${xFmt(v)}</text>`;
   }
 
   let content = '';
@@ -748,7 +769,7 @@ function svgChart(el, { series, xLabel, yFmt, xFmt, yDomain, bars }) {
     .join('');
 
   const legend = series
-    .map((s, i) => `<g transform="translate(${pad.l + 8 + i * 150},${pad.t + 4})"><rect width="10" height="3" fill="${s.color}"/><text x="15" y="4">${s.label}</text></g>`)
+    .map((s, i) => `<g transform="translate(${pad.l + (W < 420 ? 0 : i * 165)},${10 + (W < 420 ? i * 17 : 0)})"><rect width="10" height="3" fill="${s.color}"/><text x="15" y="4">${s.label}</text></g>`)
     .join('');
 
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
@@ -756,7 +777,7 @@ function svgChart(el, { series, xLabel, yFmt, xFmt, yDomain, bars }) {
     <line class="axis" x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H - pad.b}"/>
     <line class="axis" x1="${pad.l}" y1="${H - pad.b}" x2="${W - pad.r}" y2="${H - pad.b}"/>
     ${content}${legend}
-    <text x="${W / 2}" y="${H - 1}" text-anchor="middle">${xLabel}</text>
+    <text x="${W / 2}" y="${H - 5}" text-anchor="middle">${xLabel}</text>
   </svg>`;
 }
 
@@ -771,8 +792,8 @@ function renderCharts() {
 
   svgChart($('#chartCurve'), {
     series: [
-      { label: 'o que o mercado acha', color: '#7fb3c9', points: comModelo.filter((r) => r.mid > 0).map((r) => ({ x: r.strike, y: r.mid })) },
-      { label: 'o que a conta diz', color: '#b895c9', dash: true, points: comModelo.map((r) => ({ x: r.strike, y: r.modelProbYes })) },
+      { label: 'o que o mercado acha', color: '#2874a4', points: comModelo.filter((r) => r.mid > 0).map((r) => ({ x: r.strike, y: r.mid })) },
+      { label: 'o que a conta diz', color: '#7163b6', dash: true, points: comModelo.map((r) => ({ x: r.strike, y: r.modelProbYes })) },
     ],
     yDomain: [0, 1],
     yFmt: (v) => (v * 100).toFixed(0) + '%',
@@ -782,7 +803,7 @@ function renderCharts() {
 
   svgChart($('#chartDensity'), {
     series: [],
-    bars: { color: '#8fbc6a', points: a.density.map((p) => ({ x: p.strike, y: p.prob })) },
+    bars: { color: '#187354', points: a.density.map((p) => ({ x: p.strike, y: p.prob })) },
     yFmt: (v) => (v * 100).toFixed(0) + '%',
     xFmt: eixoPreco,
     xLabel: 'faixa de preço no encerramento',
@@ -790,7 +811,7 @@ function renderCharts() {
 
   const edge = comModelo.filter((r) => r.mid > 0).map((r) => ({ x: r.strike, y: r.modelProbYes - r.mid }));
   svgChart($('#chartEdge'), {
-    series: [{ label: 'vantagem', color: '#e8b84b', points: edge }],
+    series: [{ label: 'vantagem', color: '#896114', points: edge }],
     yFmt: (v) => (v * 100).toFixed(0) + ' pt',
     xFmt: eixoPreco,
     xLabel: eixoX,
@@ -804,7 +825,7 @@ function renderCharts() {
 function drawBtc() {
   if (!state.btc) return;
   svgChart($('#chartBtc'), {
-    series: [{ label: 'preço do Bitcoin', color: '#e8b84b', points: state.btc.map((c) => ({ x: c.ts, y: c.close })) }],
+    series: [{ label: 'preço do Bitcoin', color: '#896114', points: state.btc.map((c) => ({ x: c.ts, y: c.close })) }],
     yFmt: eixoPreco,
     xFmt: (v) => new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     xLabel: 'horário',
@@ -822,7 +843,7 @@ function renderArb() {
   }
   $('#arbList').innerHTML = arb
     .map(
-      (x) => `<div class="row" style="padding:10px 0;border-bottom:1px solid #2c2818">
+      (x) => `<div class="row" style="padding:10px 0;border-bottom:1px solid #e7ebe9">
       <strong class="pos">ganha ${money(x.profitPerContract, 3)} por contrato, dê no que der</strong>
       <div>${x.label}</div>
       <div class="muted">${x.detail}</div>
@@ -1131,12 +1152,80 @@ async function renderConfigTab() {
 }
 
 // ---------- eventos ----------
+$('#emptyPicker').addEventListener('click', () => $('#openPicker').click());
+$('#rankAdvanced').addEventListener('change', (event) => $('#rankTable').classList.toggle('expanded', event.target.checked));
+$('#marketAdvanced').addEventListener('change', (event) => $('#marketTable').classList.toggle('expanded', event.target.checked));
+function updatePageHeading(id) {
+  const pages = {
+    resumo: ['Visão geral', 'Entenda o momento do mercado e compare as possibilidades.'],
+    ranking: ['Oportunidades', 'Compare probabilidades, custos e retorno estimado após as taxas.'],
+    mercados: ['Mercados', 'Explore as faixas de preço e consulte as ofertas de cada contrato.'],
+    curva: ['Análise gráfica', 'Veja como as expectativas do mercado se comparam ao modelo.'],
+    arb: ['Arbitragem', 'Avalie diferenças de preço entre combinações de contratos.'],
+    auto: ['Automação', 'Controle o modo de operação, revise sugestões e defina seus limites.'],
+    config: ['Configurações', 'Ajuste o modelo de análise e consulte os dados da sua conta.'],
+  };
+  const [title, description] = pages[id] || pages.resumo;
+  $('#pageTitle').textContent = title;
+  $('#breadcrumbPage').textContent = title;
+  $('#pageDescription').textContent = description;
+  document.title = title + ' · Kalshi Bitcoin';
+  $$('.tab').forEach((tab) => {
+    if (tab.dataset.tab === id) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  });
+}
+
+$$('[data-go]').forEach((button) => button.addEventListener('click', () => {
+  $(`.tab[data-tab="${button.dataset.go}"]`).click();
+  $('#pageTitle').scrollIntoView({ block: 'start' });
+}));
+$('.identity').addEventListener('click', (event) => {
+  event.preventDefault();
+  $('.tab[data-tab="resumo"]').click();
+  window.scrollTo(0, 0);
+});
+
+// Keep keyboard focus inside the active dialog and return it to its opener.
+$$('.picker-overlay').forEach((overlay) => {
+  const panel = overlay.querySelector('.picker-panel');
+  const heading = panel.querySelector('h2');
+  heading.id = overlay.id + 'Title';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', heading.id);
+  let opener;
+  const focusable = () => Array.from(panel.querySelectorAll('button,input,select,a[href],summary,[tabindex="0"]')).filter((el) => !el.disabled && el.getClientRects().length);
+  new MutationObserver(() => {
+    if (!overlay.classList.contains('hidden')) {
+      opener = document.activeElement;
+      (panel.querySelector('input') || focusable()[0])?.focus();
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      opener?.focus();
+    }
+  }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) overlay.classList.add('hidden');
+  });
+  overlay.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') overlay.classList.add('hidden');
+    if (event.key !== 'Tab') return;
+    const elements = focusable();
+    const first = elements[0], last = elements[elements.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  });
+});
+
 $$('.tab').forEach((t) =>
   t.addEventListener('click', () => {
     $$('.tab').forEach((x) => x.classList.remove('active'));
     $$('.panel').forEach((x) => x.classList.remove('active'));
     t.classList.add('active');
     $('#tab-' + t.dataset.tab).classList.add('active');
+    updatePageHeading(t.dataset.tab);
     if (t.dataset.tab === 'config') renderConfigTab();
     else if (t.dataset.tab === 'auto') atualizarRobo();
     else renderPainelVisivel(true);
