@@ -11,6 +11,9 @@ const fs = require('fs');
 const path = require('path');
 const { KalshiClient } = require('./lib/kalshi');
 const { SpotStream, MarketPoller } = require('./lib/streams');
+const { PriceSources } = require('./lib/prices');
+const { modelKey } = require('./lib/safety');
+const { evaluate } = require('./lib/evaluation');
 const { analyze } = require('./lib/analytics');
 const { AutoTrader } = require('./lib/autotrader');
 const { BtcBoard } = require('./lib/btcboard');
@@ -31,7 +34,8 @@ function saveConfig() {
 
 // ---------- dados ao vivo ----------
 
-const spot = new SpotStream(client, config.eventTicker);
+const spot = new PriceSources(client, config.eventTicker, config);
+const chart = new SpotStream(client, config.eventTicker);
 const poller = new MarketPoller(client, config.eventTicker, config.pollIntervalMs || 750);
 
 let analysis = null;      // ultima analise completa
@@ -43,7 +47,14 @@ const MIN_COMPUTE_INTERVAL_MS = 200; // no maximo 5 recalculos por segundo
 
 function computeNow() {
   if (!poller.markets.length || !spot.price || Date.now() - spot.updatedAt > 30000) { analysis = null; return null; }
-  analysis = analyze({ rawMarkets: poller.markets, spot: spot.price, candles: spot.candles, config });
+  const records=trader.journal.all('paper').filter(r=>r.modelKey===modelKey(config) && r.sourceId===spot.sourceId);
+  const validation=Object.fromEntries(['above','below','range'].map(kind=>[kind,evaluate(records.filter(r=>r.kind===kind),config.validation)]));
+  analysis = analyze({ rawMarkets: poller.markets, spot: spot.price, candles: spot.candles, config, validation });
+  analysis.spotUpdatedAt=spot.updatedAt;
+  analysis.marketUpdatedAt=poller.updatedAt;
+  analysis.spotSourceId=spot.sourceId;
+  analysis.rawMarkets=poller.markets;
+  analysis.candles=spot.candles.filter(c=>c.ts+60000<=Date.now());
   analysis.spotSource = spot.source;
   analysis.candleCount = spot.candles.length;
   analysis.live = {
@@ -52,6 +63,7 @@ function computeNow() {
     kalshiLatencyMs: poller.lastLatencyMs,
     pollIntervalMs: poller.intervalMs,
     kalshiError: poller.lastError,
+    sourceErrors:spot.failures,
   };
   version++;
   lastComputeAt = Date.now();
@@ -78,7 +90,23 @@ spot.on('unavailable', (message) => {
 poller.on('markets', scheduleCompute);
 
 spot.start();
+chart.start();
 poller.start();
+
+trader.refreshAnalysis=async()=>{
+  const ticker=config.eventTicker;
+  const [{markets,updatedAt}]=await Promise.all([client.getMarkets(ticker).then(markets=>({markets,updatedAt:Date.now()})),spot.refresh()]);
+  if(ticker!==config.eventTicker)throw new Error('evento mudou durante atualização');
+  poller.markets=markets;poller.updatedAt=updatedAt;
+  return computeNow();
+};
+async function reconcile(){
+  if(client.hasCredentials())try{await trader.portfolio.refresh();trader.syncExposure();}catch(e){trader.state.lastError=e.message;}
+}
+reconcile();
+setInterval(reconcile,config.safety.reconcileIntervalMs);
+let resolving=false;
+setInterval(async()=>{if(resolving)return;resolving=true;try{await trader.journal.resolve(client,config.fees);trader.syncExposure();}finally{resolving=false;}},config.paper.resolutionIntervalMs);
 
 
 // ---------- conexoes abertas com o navegador ----------
@@ -96,6 +124,8 @@ function streamPayload(a) {
   return {
     v: version,
     generatedAt: a.generatedAt,
+    modelVersion:a.modelVersion, modelKey:a.modelKey, validation:a.validation,
+    spotUpdatedAt:a.spotUpdatedAt,marketUpdatedAt:a.marketUpdatedAt,spotSourceId:a.spotSourceId,
     spot: r2(a.spot),
     spotSource: a.spotSource,
     candleCount: a.candleCount,
@@ -119,6 +149,8 @@ function streamPayload(a) {
       kind: r.kind,
       subtitle: r.subtitle,
       modelReliable: r.modelReliable,
+      modelSupported:r.modelSupported, modelValidated:r.modelValidated,
+      msToClose:r.msToClose,minutesToClose:r.minutesToClose,
       closeTime: r.closeTime,
       yesBid: r.yesBid, yesAsk: r.yesAsk, noBid: r.noBid, noAsk: r.noAsk,
       yesSpread: r4(r.yesSpread),
@@ -132,6 +164,7 @@ function streamPayload(a) {
         side: l.side,
         price: l.price,
         modelProb: r4(l.modelProb),
+        probabilityLower:r4(l.probabilityLower),probabilityUpper:r4(l.probabilityUpper),conservativeEdge:r4(l.conservativeEdge),
         edge: r4(l.edge),
         breakevenProb: r4(l.breakevenProb),
         evPct: r4(l.evPct),
@@ -266,6 +299,8 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (p === '/api/stream') return openStream(req, res);
+    if (p === '/api/evaluation') return sendJson(res,200,{currentModelKey:modelKey(config),metrics:trader.journal.report(modelKey(config),config.validation),byKind:analysis?.validation || {},paper:trader.journal.all('paper').slice(-100)});
+    if (p === '/api/evaluation/compare') return sendJson(res,200,require('./lib/backtest').compare(trader.journal.all('snapshot'),trader.journal.all('paper'),['realized','implied','blend'].map(volSource=>({volSource})),config.validation));
 
     if (p === '/api/analysis') {
       const a = await whenReady();
@@ -296,6 +331,7 @@ const server = http.createServer(async (req, res) => {
         config.seriesTicker = String(patch.eventTicker).split('-')[0];
         poller.setEventTicker(patch.eventTicker);
         spot.setEventTicker(patch.eventTicker);
+        chart.setEventTicker(patch.eventTicker);
         // A analise que esta em memoria é da aposta ANTERIOR. Sem apagar ela, quem
         // perguntasse agora receberia numeros da aposta velha rotulados com o nome da
         // nova. Zerar faz /api/analysis esperar os dados certos chegarem.
@@ -378,13 +414,17 @@ const server = http.createServer(async (req, res) => {
     // Mostra o que o robo faria, sem nunca apostar
     if (p === '/api/auto/preview') {
       const a = await whenReady();
-      const preview = a.bestOverall.slice(0, 8).map((o) => ({
+      const preview = await Promise.all(a.bestOverall.slice(0, 8).map(async (o) => {
+        let bookError=null;
+        try {if(!await trader.prepareBook(o))bookError='livro sem liquidez/preço aprovado';}catch(e){bookError=e.message;}
+        return ({
         ticker: o.ticker, side: o.side, strike: o.strike, price: o.price,
         modelProb: o.modelProb, edge: o.edge, evPct: o.evPct, evPctCapital: o.evPctCapital,
         winReturnPctCapital: o.winReturnPctCapital, score: o.score,
-        sizing: trader.sizeOrder(o),
-        vetoes: trader.vetoes(o, a),
-      }));
+        closeTime:o.closeTime,msToClose:Date.parse(o.closeTime)-Date.now(),minutesToClose:(Date.parse(o.closeTime)-Date.now())/60000,
+        sizing: bookError ? {contracts:0,estimatedCost:0} : trader.sizeOrder(o),
+        vetoes: [...trader.vetoes(o, a),...(bookError?[bookError]:[])],
+      });}));
       return sendJson(res, 200, { preview });
     }
 
@@ -405,7 +445,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/btc-history') {
-      return sendJson(res, 200, { eventTicker: config.eventTicker, candles: spot.history, source: spot.source });
+      return sendJson(res, 200, { eventTicker: config.eventTicker, candles: chart.history, source: chart.source });
     }
 
     // Lista para ESCOLHER qual aposta de Bitcoin analisar (todas as series, nao so a
@@ -431,7 +471,7 @@ server.listen(config.port, () => {
   console.log(`\n  Painel de Apostas no Bitcoin`);
   console.log(`  Abra no navegador: http://localhost:${config.port}`);
   console.log(`  Evento: ${config.eventTicker}`);
-  console.log(`  Preco do Bitcoin: gráfico da aposta na Kalshi (consulta a cada 1 s) | Precos da Kalshi: a cada ${poller.intervalMs} ms`);
+  console.log(`  Referência: BRTI / Coinbase / Binance; gráfico: evento Kalshi | Mercado: a cada ${poller.intervalMs} ms`);
   const nomeModo = { normal: 'normal (so analisa)', semi: 'semiautomatico (sugere e espera voce)', full: 'TOTALMENTE AUTOMATICO' };
   console.log(`  Modo: ${nomeModo[trader.state.mode]} | Modo teste: ${trader.state.dryRun ? 'ligado (nada e enviado)' : 'DESLIGADO - APOSTA DE VERDADE'}`);
   console.log(`  Conta da Kalshi: ${client.hasCredentials() ? 'cadastrada' : 'nao cadastrada (so analise)'}\n`);

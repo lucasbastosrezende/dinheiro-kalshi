@@ -68,7 +68,7 @@ test('dimensionamento nao promete contrato que estoura o orcamento com taxa', ()
       kellyFraction: 1,
     },
   };
-  const trader = new AutoTrader({ hasCredentials: () => false }, config);
+  const trader = new AutoTrader({ hasCredentials: () => false }, config, new (require('../lib/journal').Journal)(':memory:'));
   const size = trader.sizeOrder({ price: 0.20, kelly: 1 });
 
   assert.equal(size.contracts, 0.95);

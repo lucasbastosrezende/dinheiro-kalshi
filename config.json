@@ -1,5 +1,5 @@
 {
-  "eventTicker": "KXBTCD-26SEP0816",
+  "eventTicker": "KXBTCD-26SEP0818",
   "seriesTicker": "KXBTCD",
   "port": 8787,
   "model": {
@@ -8,7 +8,11 @@
     "ewmaHalfLifeMinutes": 90,
     "blendWeightRealized": 0.35,
     "volFloorAnnualPct": 15,
-    "volCeilingAnnualPct": 250
+    "volCeilingAnnualPct": 250,
+    "probabilityUncertainty": 0.1,
+    "fallbackVolAnnual": 0.5,
+    "volStressLow": 0.75,
+    "volStressHigh": 1.25
   },
   "fees": {
     "tradingFeeRate": 0.07,
@@ -25,7 +29,7 @@
     "maxSpreadCents": 4
   },
   "auto": {
-    "mode": "full",
+    "mode": "normal",
     "dryRun": true,
     "suggestionTtlSeconds": 45,
     "maxPendingSuggestions": 1,
@@ -43,7 +47,9 @@
       "yes",
       "no"
     ],
-    "cooldownSecondsPerMarket": 600
+    "cooldownSecondsPerMarket": 600,
+    "maxEventNotional": 25,
+    "maxDirectionNotional": 50
   },
   "credentials": {
     "apiKeyId": "",
@@ -56,5 +62,52 @@
   "capital": {
     "inicial": 3.4,
     "atual": 5.67
+  },
+  "safety": {
+    "maxSpotAgeMs": 5000,
+    "maxMarketAgeMs": 5000,
+    "maxAnalysisAgeMs": 5000,
+    "maxPortfolioAgeMs": 10000,
+    "reconcileIntervalMs": 30000
+  },
+  "priceSources": {
+    "priority": [
+      "brti",
+      "coinbase",
+      "binance"
+    ],
+    "requireBRTIForReal": true
+  },
+  "contracts": {
+    "series": {
+      "KXBTCD": {
+        "model": "terminal",
+        "kinds": [
+          "above",
+          "below",
+          "range"
+        ],
+        "rulesContain": [
+          "simple average",
+          "sixty seconds",
+          "CF Benchmarks",
+          "BRTI"
+        ],
+        "settlementAverageSeconds": 60
+      }
+    },
+    "events": {}
+  },
+  "validation": {
+    "minEvents": 200,
+    "maxBrier": 0.2,
+    "maxCalibrationError": 0.05,
+    "minBrierImprovement": 0.005
+  },
+  "paper": {
+    "resolutionIntervalMs": 60000
+  },
+  "strategy": {
+    "exitMode": "settlement"
   }
 }

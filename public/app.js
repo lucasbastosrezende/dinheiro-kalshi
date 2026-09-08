@@ -180,7 +180,8 @@ function prepararDados(a) {
         floorStrike: r.floorStrike,
         capStrike: r.capStrike,
         subtitle: r.subtitle,
-        modelReliable: r.modelReliable,
+        modelReliable: r.modelReliable, modelSupported:r.modelSupported, modelValidated:r.modelValidated,
+        probabilityLower:l.probabilityLower,probabilityUpper:l.probabilityUpper,
         side: l.side,
         price: l.price,
         impliedProb: l.price,
@@ -269,7 +270,7 @@ function render() {
   $('#tipoApostaDetalhe').textContent = FORMATO[a.event.shape] || '';
 
   $('#spot').textContent = alvo(a.spot);
-  $('#spotSource').textContent = 'fonte: ' + (a.spotSource || '');
+  $('#spotSource').textContent = 'fonte: ' + (a.spotSource || '') + ' · idade: ' + Math.max(0,(Date.now()-a.spotUpdatedAt)/1000).toFixed(1) + ' s';
   $('#closeTime').textContent = hasClose ? new Date(a.event.closeTime).toLocaleString('pt-BR') : 'Horário indisponível';
   $('#volUsed').textContent = pct(a.vol.usedAnnual, 0);
   $('#volDetail').textContent = `medida agora ${pct(a.vol.realizedAnnual, 0)} · esperada pelo mercado ${pct(a.vol.impliedAnnual, 0)}`;
@@ -322,18 +323,15 @@ function render() {
   // do Bitcoin no fechamento; apostas como "chega a 50k antes de 100k" ou "quando cruza
   // 85k" dependem do caminho até lá, não só do valor final, e não têm chance calculável
   // por este modelo. Nesse caso a tela mostra só os dados do mercado, sem vantagem.
-  const semModelo = a.rows.filter((r) => r.modelReliable === false).length;
+  const semModelo = a.rows.filter((r) => r.modelSupported === false).length;
   const aviso = $('#avisoModelo');
   if (semModelo) {
-    const todas = semModelo === a.rows.length;
     aviso.classList.remove('hidden');
-    aviso.innerHTML = todas
-      ? `<strong>Esta aposta não tem chance calculada.</strong> O cálculo deste painel projeta o preço do Bitcoin no fechamento, e este tipo de aposta depende do caminho até lá (o que veio primeiro, quando aconteceu). Os preços e o movimento do mercado continuam corretos, mas as colunas de vantagem, retorno e nota ficam sem sentido aqui — e o modo automático nunca aposta nelas.`
-      : `<strong>${semModelo} de ${a.rows.length} faixas ficaram sem chance calculada</strong> porque o formato delas não é projetável por este modelo. Elas aparecem marcadas e o modo automático não aposta nelas.`;
-  } else {
-    aviso.classList.add('hidden');
-    aviso.innerHTML = '';
-  }
+    aviso.textContent = semModelo + ' faixas sem regra/modelo suportados. Sugestões e ordens bloqueadas nessas faixas.';
+  } else if(a.rows.some(r=>!r.modelValidated)) {
+    aviso.classList.remove('hidden');
+    aviso.textContent = 'Modelo em avaliação: fórmula disponível, sem evidência histórica suficiente. Apenas paper trading; dinheiro real bloqueado. Intervalo exibido é de sensibilidade, não confiança estatística.';
+  } else { aviso.classList.add('hidden'); aviso.textContent=''; }
 
   renderPainelVisivel();
 }
@@ -481,7 +479,7 @@ function renderRanking() {
       <td><span class="pill ${o.side}">${o.side === 'yes' ? 'SIM' : 'NÃO'}</span></td>
       <td>${money(o.orderCost)}</td>
       <td>${pct(o.impliedProb)}</td>
-      <td><strong>${o.modelReliable === false ? 'Sem modelo' : (o.modelProb > 0.9995 && o.modelProb < 1 ? '>99,9%' : pct(o.modelProb))}</strong></td>
+      <td title="Intervalo de sensibilidade: ${pct(o.probabilityLower)} a ${pct(o.probabilityUpper)}"><strong>${o.modelSupported === false ? 'Sem modelo' : (o.modelProb > 0.9995 && o.modelProb < 1 ? '>99,9%' : pct(o.modelProb))}</strong>${o.modelSupported ? `<small class="muted">${pct(o.probabilityLower)}–${pct(o.probabilityUpper)} · ${o.modelValidated ? 'validado' : 'em avaliação'}</small>` : ''}</td>
       <td class="${cls(o.edge)}">${pontos(o.edge)}</td>
       <td>${pct(o.breakevenProb)}</td>
       <td class="${cls(o.evPct)}"><strong>${pct(o.evPct)}</strong></td>
@@ -810,7 +808,7 @@ function renderCharts() {
   const a = state.analysis;
   // Só entram faixas com preço-alvo e com chance calculável: as demais virariam pontos
   // em zero, inventando uma linha que não quer dizer nada.
-  const comModelo = a.rows.filter((r) => r.modelReliable !== false && r.strike > 0);
+  const comModelo = a.rows.filter((r) => r.modelSupported !== false && r.strike > 0);
   const eixoX = a.event.contractModel === 'touch' ? 'valor que o Bitcoin precisa encostar' : 'preço-alvo do Bitcoin';
 
   svgChart($('#chartCurve'), {
@@ -1418,3 +1416,18 @@ $('#saveCapital').addEventListener('click', async () => {
 carregarCapital();
 conectarAoVivo();
 atualizarRobo();
+
+// Idade calculada pelo relógio atual, mesmo quando a conexão para de atualizar.
+setInterval(() => {
+  const a=state.analysis;if(!a?.spotUpdatedAt)return;
+  const age=Math.max(0,Date.now()-a.spotUpdatedAt);
+  $('#spotSource').textContent='fonte: '+a.spotSource+' · '+(age/1000).toFixed(1)+' s'+(age>(state.config?.safety?.maxSpotAgeMs??5000)?' · VENCIDO':'');
+},1000);
+$('#evaluationDetails').addEventListener('toggle',async(e)=>{
+  if(!e.target.open)return;
+  const target=$('#evaluationMetrics');
+  try {
+    const {metrics:m}=await api('/api/evaluation');
+    target.textContent='Eventos: '+m.observations+' · Brier modelo: '+(m.brier?.toFixed(4)??'—')+' · Brier mercado: '+(m.marketBrier?.toFixed(4)??'—')+' · Erro de calibração: '+pct(m.calibrationError)+' · P&L líquido: '+money(m.netReturn)+' · Drawdown: '+money(m.maxDrawdown)+' · Sharpe por evento: '+(m.sharpePerEvent?.toFixed(3)??'—')+'. A autorização real é avaliada por tipo de contrato e fonte, separadamente.';
+  }catch(e){target.textContent='Não foi possível consultar: '+e.message;}
+});
