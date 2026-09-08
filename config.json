@@ -1,5 +1,5 @@
 {
-  "eventTicker": "KXBTCD-26SEP0620",
+  "eventTicker": "KXBTCD-26SEP0816",
   "seriesTicker": "KXBTCD",
   "port": 8787,
   "model": {
@@ -55,6 +55,6 @@
   "autoCheckSeconds": 10,
   "capital": {
     "inicial": 3.4,
-    "atual": 3.88
+    "atual": 5.67
   }
 }

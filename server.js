@@ -9,7 +9,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { KalshiClient, getSpotBtc, getBtcMinuteCandles } = require('./lib/kalshi');
+const { KalshiClient } = require('./lib/kalshi');
 const { SpotStream, MarketPoller } = require('./lib/streams');
 const { analyze } = require('./lib/analytics');
 const { AutoTrader } = require('./lib/autotrader');
@@ -31,17 +31,8 @@ function saveConfig() {
 
 // ---------- dados ao vivo ----------
 
-const spot = new SpotStream(getSpotBtc);
+const spot = new SpotStream(client, config.eventTicker);
 const poller = new MarketPoller(client, config.eventTicker, config.pollIntervalMs || 750);
-
-let candles = [];
-let candlesAt = 0;
-async function refreshCandles() {
-  try {
-    candles = await getBtcMinuteCandles(config.model.volLookbackMinutes);
-    candlesAt = Date.now();
-  } catch (_) {}
-}
 
 let analysis = null;      // ultima analise completa
 let version = 0;          // aumenta a cada analise nova
@@ -51,10 +42,10 @@ let pendingCompute = null;
 const MIN_COMPUTE_INTERVAL_MS = 200; // no maximo 5 recalculos por segundo
 
 function computeNow() {
-  if (!poller.markets.length || !spot.price) return null;
-  analysis = analyze({ rawMarkets: poller.markets, spot: spot.price, candles, config });
+  if (!poller.markets.length || !spot.price || Date.now() - spot.updatedAt > 30000) { analysis = null; return null; }
+  analysis = analyze({ rawMarkets: poller.markets, spot: spot.price, candles: spot.candles, config });
   analysis.spotSource = spot.source;
-  analysis.candleCount = candles.length;
+  analysis.candleCount = spot.candles.length;
   analysis.live = {
     spotAgeMs: Date.now() - spot.updatedAt,
     marketsAgeMs: Date.now() - poller.updatedAt,
@@ -80,12 +71,15 @@ function scheduleCompute() {
 }
 
 spot.on('price', scheduleCompute);
+spot.on('unavailable', (message) => {
+  analysis = null;
+  for (const res of clients) res.write('event: unavailable\ndata: ' + JSON.stringify({ message }) + '\n\n');
+});
 poller.on('markets', scheduleCompute);
 
 spot.start();
 poller.start();
-refreshCandles();
-setInterval(refreshCandles, 60000);
+
 
 // ---------- conexoes abertas com o navegador ----------
 
@@ -143,9 +137,21 @@ function streamPayload(a) {
         evPct: r4(l.evPct),
         evDollars: r4(l.evDollars),
         grossReturnPct: r4(l.grossReturnPct),
+        winReturnPct: r4(l.winReturnPct),
+        evPctCapital: r4(l.evPctCapital),
+        winReturnPctCapital: r4(l.winReturnPctCapital),
+        contracts: r4(l.contracts),
+        orderCost: r4(l.orderCost),
+        maxPayout: r4(l.maxPayout),
+        maxGain: r4(l.maxGain),
+        maxLoss: r4(l.maxLoss),
+        entryCostPerContract: r4(l.entryCostPerContract),
+        maxPayoutPerContract: r4(l.maxPayoutPerContract),
+        maxGainPerContract: r4(l.maxGainPerContract),
         maxLossPerContract: r4(l.maxLossPerContract),
         kelly: r4(l.kelly),
         feePerContract: r4(l.feePerContract),
+        exitFeePerContract: r4(l.exitFeePerContract),
         roundTripCost: r4(l.roundTripCost),
         safety: Math.round(l.scores.safety),
         liquidity: Math.round(l.scores.liquidity),
@@ -191,7 +197,7 @@ function openStream(req, res) {
 // automatico envia as ordens. Uma execucao por vez, para nunca haver duas em paralelo.
 let roboOcupado = false;
 setInterval(async () => {
-  if (roboOcupado || !analysis || trader.state.mode === 'normal') return;
+  if (roboOcupado || !spot.price || Date.now() - spot.updatedAt > 30000 || !analysis || trader.state.mode === 'normal') return;
   roboOcupado = true;
   try {
     await trader.runOnce(analysis);
@@ -244,11 +250,11 @@ function serveStatic(req, res, urlPath) {
 
 // Espera a primeira analise ficar pronta (usado logo depois que o servidor sobe).
 function whenReady(timeoutMs = 15000) {
-  if (analysis) return Promise.resolve(analysis);
+  if (analysis && spot.price && Date.now() - spot.updatedAt <= 30000) return Promise.resolve(analysis);
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
     const iv = setInterval(() => {
-      if (analysis) { clearInterval(iv); resolve(analysis); }
+      if (analysis && spot.price && Date.now() - spot.updatedAt <= 30000) { clearInterval(iv); resolve(analysis); }
       else if (Date.now() - t0 > timeoutMs) { clearInterval(iv); reject(new Error('ainda estou buscando os primeiros dados, tente de novo em instantes')); }
     }, 100);
   });
@@ -289,6 +295,7 @@ const server = http.createServer(async (req, res) => {
         config.eventTicker = patch.eventTicker;
         config.seriesTicker = String(patch.eventTicker).split('-')[0];
         poller.setEventTicker(patch.eventTicker);
+        spot.setEventTicker(patch.eventTicker);
         // A analise que esta em memoria é da aposta ANTERIOR. Sem apagar ela, quem
         // perguntasse agora receberia numeros da aposta velha rotulados com o nome da
         // nova. Zerar faz /api/analysis esperar os dados certos chegarem.
@@ -373,7 +380,8 @@ const server = http.createServer(async (req, res) => {
       const a = await whenReady();
       const preview = a.bestOverall.slice(0, 8).map((o) => ({
         ticker: o.ticker, side: o.side, strike: o.strike, price: o.price,
-        modelProb: o.modelProb, edge: o.edge, evPct: o.evPct, score: o.score,
+        modelProb: o.modelProb, edge: o.edge, evPct: o.evPct, evPctCapital: o.evPctCapital,
+        winReturnPctCapital: o.winReturnPctCapital, score: o.score,
         sizing: trader.sizeOrder(o),
         vetoes: trader.vetoes(o, a),
       }));
@@ -397,8 +405,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/btc-history') {
-      if (!candles.length) await refreshCandles();
-      return sendJson(res, 200, { candles: candles.slice(-360).map((c) => ({ ts: c.ts, close: c.close })) });
+      return sendJson(res, 200, { eventTicker: config.eventTicker, candles: spot.history, source: spot.source });
     }
 
     // Lista para ESCOLHER qual aposta de Bitcoin analisar (todas as series, nao so a
@@ -424,7 +431,7 @@ server.listen(config.port, () => {
   console.log(`\n  Painel de Apostas no Bitcoin`);
   console.log(`  Abra no navegador: http://localhost:${config.port}`);
   console.log(`  Evento: ${config.eventTicker}`);
-  console.log(`  Preco do Bitcoin: ao vivo (WebSocket) | Precos da Kalshi: a cada ${poller.intervalMs} ms`);
+  console.log(`  Preco do Bitcoin: gráfico da aposta na Kalshi (consulta a cada 1 s) | Precos da Kalshi: a cada ${poller.intervalMs} ms`);
   const nomeModo = { normal: 'normal (so analisa)', semi: 'semiautomatico (sugere e espera voce)', full: 'TOTALMENTE AUTOMATICO' };
   console.log(`  Modo: ${nomeModo[trader.state.mode]} | Modo teste: ${trader.state.dryRun ? 'ligado (nada e enviado)' : 'DESLIGADO - APOSTA DE VERDADE'}`);
   console.log(`  Conta da Kalshi: ${client.hasCredentials() ? 'cadastrada' : 'nao cadastrada (so analise)'}\n`);
