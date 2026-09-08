@@ -21,6 +21,7 @@ const money = (v, d = 2) => (v == null || !isFinite(v) ? '—' : 'US$ ' + v.toLo
 const pct = (v, d = 1) => (v == null || !isFinite(v) ? '—' : (v * 100).toFixed(d).replace('.', ',') + '%');
 const sig = (v, d = 1) => (v == null || !isFinite(v) ? '—' : v.toFixed(d).replace('.', ','));
 const num = (v) => (v == null || !isFinite(v) ? '—' : Math.round(v).toLocaleString('pt-BR'));
+const contratos = (v) => (v == null || !isFinite(v) ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const alvo = (v) => 'US$ ' + Math.round(v).toLocaleString('pt-BR');
 
 // Em que condição a faixa paga. A Kalshi tem quatro formatos e cada um ganha numa
@@ -133,7 +134,18 @@ function conectarAoVivo() {
     $('#liveDot').classList.remove('stale');
   };
 
+  es.addEventListener('unavailable', (e) => {
+    state.analysis = null;
+    document.body.classList.add('chart-unavailable');
+    state.btc = null;
+    $('#spot').textContent = '—';
+    $('#spotSource').textContent = 'Gráfico da aposta indisponível';
+    $('#liveDot').classList.add('stale');
+    $('#liveDetail').textContent = JSON.parse(e.data).message;
+    $('#chartBtc').innerHTML = '';
+  });
   es.onmessage = (e) => {
+    document.body.classList.remove('chart-unavailable');
     state.analysis = prepararDados(JSON.parse(e.data));
     state.recebidoEm = performance.now();
     state.conectado = true;
@@ -177,6 +189,17 @@ function prepararDados(a) {
         evPct: l.evPct,
         evDollars: l.evDollars,
         grossReturnPct: l.grossReturnPct,
+        winReturnPct: l.winReturnPct,
+        evPctCapital: l.evPctCapital,
+        winReturnPctCapital: l.winReturnPctCapital,
+        contracts: l.contracts,
+        orderCost: l.orderCost,
+        maxPayout: l.maxPayout,
+        maxGain: l.maxGain,
+        maxLoss: l.maxLoss,
+        entryCostPerContract: l.entryCostPerContract,
+        maxPayoutPerContract: l.maxPayoutPerContract,
+        maxGainPerContract: l.maxGainPerContract,
         maxLossPerContract: l.maxLossPerContract,
         kelly: l.kelly,
         breakevenProb: l.breakevenProb,
@@ -334,11 +357,13 @@ function renderPainelVisivel(forcar) {
   ultimoDesenhoPesado = agora;
 
   const aba = abaAtual();
-  if (aba === 'resumo') renderSummary();
-  else if (aba === 'ranking') renderRanking();
-  else if (aba === 'mercados') renderMarkets();
-  else if (aba === 'curva') renderCharts();
-  else if (aba === 'arb') renderArb();
+  if (aba === 'resumo') {
+    renderSummary();
+    renderRanking();
+    if ($('#marketQuotes').open) renderMarkets();
+    if ($('#marketCharts').open) renderCharts();
+    if ($('#marketArbitrage').open) renderArb();
+  }
 }
 
 function tickCountdown() {
@@ -363,54 +388,30 @@ setInterval(tickCountdown, 500);
 function renderSummary() {
   const a = state.analysis;
   const t = a.totals;
-  const best = a.bestOverall[0];
-  const fator = fatorCapital();
   const cards = [
-    { l: 'Faixas de preço', v: t.markets, s: 'faixas disponíveis no evento' },
-    { l: 'Contratos negociados', v: num(t.totalVolume), s: 'movimento total de hoje' },
-    { l: 'Contratos em aberto', v: num(t.totalOpenInterest), s: 'contratos ainda ativos' },
-    { l: 'Diferença compra/venda', v: sig(t.avgSpreadCents) + ' centavos', s: 'quanto menor, melhor' },
-    { l: 'Retorno esperado positivo', v: t.positiveEvCount, s: `de ${t.opportunitiesEligible} analisadas` },
-    { l: 'Arbitragem', v: a.arbitrage.length, s: 'combinações identificadas' },
-    { l: 'Melhor nota', v: best ? best.score.toFixed(0) : '—', s: best ? `${LADO[best.side].toLowerCase()} de ${alvo(best.strike)}` : '' },
+    { l: 'Faixas disponíveis', v: t.markets, s: t.opportunitiesEligible + ' oportunidades com liquidez' },
+    { l: 'Retorno esperado positivo', v: t.positiveEvCount, s: 'estimativa após taxas' },
+    { l: 'Diferença compra/venda', v: sig(t.avgSpreadCents) + ' ¢', s: 'média do evento' },
   ];
-  if (fator !== 1) {
-    cards.push({ l: 'Ganho se acertar (ajustado)', v: best ? money(best.contracts ? best.contracts * (1 - best.price) * fator : (1 - best.price) * fator) : '—', s: `capital ${fator >= 1 ? 'valorizou' : 'desvalorizou'} ${pct(Math.abs(fator - 1))}` });
-  }
-  $('#summaryCards').innerHTML = cards
-    .map((c) => `<div class="kpi"><label>${c.l}</label><strong>${c.v}</strong><span>${c.s}</span></div>`)
-    .join('');
+  $('#summaryCards').innerHTML = cards.map(c => `<div class="kpi"><label>${c.l}</label><strong>${c.v}</strong><span>${c.s}</span></div>`).join('');
+  $('#arbCount').textContent = a.arbitrage.length;
 
-  const mini = (list) =>
-    list
-      .slice(0, 5)
-      .map(
-        (o) => `<div class="row">
-      <span class="pill ${o.side}">${LADO[o.side]}</span>
-      <div><div class="name">${tituloFaixa(o)}</div>
-      <div class="sub">custa ${money(o.price)} · chance de ${pct(o.modelProb)} · precisa de ${pct(o.breakevenProb)} para empatar</div></div>
-      <div style="text-align:right"><div class="${cls(o.evPct)}">${pct(o.evPct)}</div><div class="sub">retorno</div></div>
-      <div style="text-align:right"><div>${o.scores.safety.toFixed(0)}</div><div class="sub">segurança</div></div>
-    </div>`
-      )
-      .join('') || '<p class="muted">nenhuma aposta passou nos filtros no momento</p>';
-
-  $('#topSafe').innerHTML = mini(a.safest);
-  $('#topProfit').innerHTML = mini(a.mostProfitable);
 }
 
 // ---------- MELHORES APOSTAS ----------
 const COL_AJUDA = {
   alvo: 'O preço de referência da aposta.',
   tipo: 'Vai passar = o Bitcoin encerra acima do preço-alvo. Não passa = encerra abaixo.',
-  custo: 'Quanto você paga por contrato. Se acertar, ele vira US$ 1,00.',
+  custo: 'Custo efetivo da ordem de referência: preço dos contratos mais a taxa da Kalshi.',
   mercado: 'A chance que o mercado dá. É o próprio preço em porcentagem.',
   conta: 'A chance calculada aqui, com base no preço atual, no tempo que falta e na oscilação do Bitcoin.',
   vantagem: 'Chance calculada menos chance do mercado. Quanto maior, mais barata está a aposta.',
   equilibrio: 'Chance mínima de acerto para não sair no prejuízo, já com a taxa.',
-  retorno: 'Quanto rende em média cada real arriscado, se você repetisse essa aposta muitas vezes.',
+  retorno: 'Quanto rende em média cada real gasto, já descontando a taxa, se você repetisse essa aposta muitas vezes.',
   ganho: 'Ganho médio em dinheiro por contrato.',
-  paga: 'Quanto o dinheiro rende se a aposta der certo.',
+  paga: 'Retorno líquido sobre o custo total se a aposta der certo, já descontando a taxa de entrada.',
+  retornoCapital: 'Retorno esperado desta aposta composto com a valorização já acumulada do seu capital: novo saldo acumulado se a expectativa se confirmar.',
+  pagaCapital: 'Saldo acumulado (capital inicial → atual → esta aposta) se você ganhar, em % composta sobre o capital total.',
   perde: 'Quanto você perde por contrato se errar. É sempre tudo.',
   quanto: 'Fatia do seu dinheiro que a matemática indicaria para essa aposta.',
   distancia: 'Quantas oscilações normais o Bitcoin precisa andar para chegar no preço-alvo.',
@@ -425,6 +426,20 @@ const COL_AJUDA = {
 function th(label, key) {
   return `<th title="${COL_AJUDA[key]}">${label}</th>`;
 }
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+Object.assign(COL_AJUDA, {
+  alvo: 'Condição definida pelo contrato. SIM aposta que ela acontece; NÃO aposta que ela não acontece.',
+  tipo: 'SIM e NÃO se referem à condição do contrato, conforme as regras de liquidação do evento.',
+  ganho: 'Lucro ou prejuízo esperado para a ordem inteira, em dólares, após a taxa de entrada estimada.',
+  perde: 'Perda máxima da ordem na liquidação: todo o custo de entrada, incluindo a taxa estimada.',
+  quantidade: 'Quantidade de contratos da ordem de referência usada nos cálculos.',
+  lucroOrdem: 'Lucro líquido da ordem se vencer na liquidação: pagamento menos custo e taxa de entrada estimada.',
+  situacao: 'Resultado dos filtros de volume, contratos em aberto, spread, preço e disponibilidade do modelo. Não garante execução nem lucro.',
+});
 
 function renderRanking() {
   const a = state.analysis;
@@ -445,44 +460,51 @@ function renderRanking() {
   $('#rankCount').textContent = `${rows.length} apostas na lista`;
 
   const head = `<thead><tr>
-    ${th('Preço-alvo', 'alvo')}${th('Aposta', 'tipo')}${th('Custa', 'custo')}
-    ${th('Chance do mercado', 'mercado')}${th('Chance calculada', 'conta')}${th('Vantagem', 'vantagem')}
-    ${th('Precisa de', 'equilibrio')}${th('Retorno esperado', 'retorno')}${th('Ganho médio', 'ganho')}
-    ${th('Paga se acertar', 'paga')}${th('Perde se errar', 'perde')}${th('Quanto apostar', 'quanto')}
+    ${th('Condição do contrato', 'alvo')}${th('Lado', 'tipo')}${th('Custo / perda máxima', 'custo')}
+    ${th('Preço implícito (%)', 'mercado')}${th('Chance estimada', 'conta')}${th('Vantagem', 'vantagem')}
+    ${th('Chance de equilíbrio', 'equilibrio')}${th('Retorno esperado', 'retorno')}${th('Lucro esperado (US$)', 'ganho')}
+    ${th('Retorno se ganhar', 'paga')}${th('Retorno esperado (capital)', 'retornoCapital')}${th('Se ganhar (capital)', 'pagaCapital')}
+    ${th('Perde se errar', 'perde')}${th('Quanto apostar', 'quanto')}
     ${th('Distância', 'distancia')}${th('Diferença', 'diferenca')}${th('Negociados', 'negociados')}
-    ${th('Em aberto', 'abertos')}${th('Segurança', 'seguranca')}${th('Nota', 'nota')}${th('Situação', 'situacao')}
+    ${th('Em aberto', 'abertos')}${th('Segurança', 'seguranca')}${th('Nota', 'nota')}${th('Filtros', 'situacao')}${th('Contratos', 'quantidade')}${th('Lucro se ganhar', 'lucroOrdem')}
   </tr></thead>`;
 
   const body = rows
     .map((o) => {
       const st = o.eligible
-        ? '<span class="pill yes">ok</span>'
-        : `<span class="pill warn" title="${o.filtersFailed.map(traduzMotivo).join(', ')}">pouco movimento</span>`;
+        ? '<span class="pill yes">Passou nos filtros</span>'
+        : `<span class="pill warn" title="${escapeHtml(o.filtersFailed.map(traduzMotivo).join(', '))}">Ver restrições</span>`;
+      const market = a.rows.find((m) => m.ticker === o.ticker);
+      const condition = market ? descreveFaixa(market, a) : (o.subtitle || alvo(o.strike));
       return `<tr>
-      <td>${alvo(o.strike)}</td>
-      <td><span class="pill ${o.side}">${LADO[o.side]}</span></td>
-      <td>${money(o.price)}</td>
+      <td>${escapeHtml(condition)}</td>
+      <td><span class="pill ${o.side}">${o.side === 'yes' ? 'SIM' : 'NÃO'}</span></td>
+      <td>${money(o.orderCost)}</td>
       <td>${pct(o.impliedProb)}</td>
-      <td><strong>${pct(o.modelProb)}</strong></td>
+      <td><strong>${o.modelReliable === false ? 'Sem modelo' : (o.modelProb > 0.9995 && o.modelProb < 1 ? '>99,9%' : pct(o.modelProb))}</strong></td>
       <td class="${cls(o.edge)}">${pontos(o.edge)}</td>
       <td>${pct(o.breakevenProb)}</td>
       <td class="${cls(o.evPct)}"><strong>${pct(o.evPct)}</strong></td>
       <td class="${cls(o.evDollars)}">${money(o.evDollars, 3)}</td>
-      <td>${pct(o.grossReturnPct, 0)}</td>
-      <td class="neg">${money(-o.maxLossPerContract)}</td>
+      <td>${pct(o.winReturnPct, 1)}</td>
+      <td class="${cls(o.evPctCapital)}">${pct(o.evPctCapital, 1)}</td>
+      <td>${pct(o.winReturnPctCapital, 1)}</td>
+      <td class="neg">${money(-o.maxLoss)}</td>
       <td>${pct(o.kelly, 0)}</td>
       <td>${sig(Math.abs(o.sigmaMoves))}</td>
       <td>${(o.spread * 100).toFixed(0)} c</td>
       <td>${num(o.volume)}</td>
       <td>${num(o.openInterest)}</td>
-      <td>${scoreBar(o.scores.safety, '#187354')}</td>
-      <td>${scoreBar(o.score, '#2874a4')}</td>
+      <td>${scoreBar(o.scores.safety, 'var(--green)')}</td>
+      <td>${scoreBar(o.score, 'var(--blue)')}</td>
       <td>${st}</td>
+      <td>${contratos(o.contracts)}</td>
+      <td class="${cls(o.maxGain)}">${money(o.maxGain)}</td>
     </tr>`;
     })
     .join('');
 
-  $('#rankTable').innerHTML = head + '<tbody>' + (body || '<tr><td colspan="19" class="empty-state">Nenhum contrato para estes filtros. Ajuste os filtros ou selecione outro mercado.</td></tr>') + '</tbody>';
+  $('#rankTable').innerHTML = head + '<tbody>' + (body || '<tr><td colspan="23" class="empty-state">Nenhum contrato para estes filtros. Ajuste os filtros ou selecione outro mercado.</td></tr>') + '</tbody>';
 }
 
 // ---------- TODAS AS FAIXAS ----------
@@ -527,7 +549,7 @@ function renderMarkets() {
       <td>${(r.yesSpread * 100).toFixed(0)} c</td>
       <td>${num(r.volume)}</td><td>${num(r.openInterest)}</td>
       <td><span class="pill ${r.bestSide}">${LADO[r.bestSide]}</span></td>
-      <td>${scoreBar(r.bestScore, '#2874a4')}</td>
+      <td>${scoreBar(r.bestScore, 'var(--blue)')}</td>
     </tr>`;
     })
     .join('');
@@ -684,6 +706,7 @@ function renderBoard() {
 }
 
 async function showMarketDetail(ticker, silencioso) {
+  if (!state.analysis) return;
   const r = state.analysis.rows.find((x) => x.ticker === ticker);
   if (!r) return;
   state.faixaAberta = ticker;
@@ -724,7 +747,7 @@ async function showMarketDetail(ticker, silencioso) {
         ${th('Segurança', 'seguranca')}<th title="O quanto essa faixa é movimentada">Movimento</th>${th('Nota', 'nota')}
       </tr></thead><tbody>${legTable}</tbody></table>
     </div>
-    <div class="grid2">${renderSide(levels.yes_dollars, 'Ofertas para "vai passar"', '#187354')}${renderSide(levels.no_dollars, 'Ofertas para "não passa"', '#b64643')}</div>
+    <div class="grid2">${renderSide(levels.yes_dollars, 'Ofertas para "vai passar"', 'var(--green)')}${renderSide(levels.no_dollars, 'Ofertas para "não passa"', 'var(--red)')}</div>
     <p class="hint">As ofertas acima se atualizam sozinhas enquanto esta faixa estiver aberta.</p>`;
 }
 
@@ -792,8 +815,8 @@ function renderCharts() {
 
   svgChart($('#chartCurve'), {
     series: [
-      { label: 'o que o mercado acha', color: '#2874a4', points: comModelo.filter((r) => r.mid > 0).map((r) => ({ x: r.strike, y: r.mid })) },
-      { label: 'o que a conta diz', color: '#7163b6', dash: true, points: comModelo.map((r) => ({ x: r.strike, y: r.modelProbYes })) },
+      { label: 'o que o mercado acha', color: 'var(--blue)', points: comModelo.filter((r) => r.mid > 0).map((r) => ({ x: r.strike, y: r.mid })) },
+      { label: 'o que a conta diz', color: 'var(--purple)', dash: true, points: comModelo.map((r) => ({ x: r.strike, y: r.modelProbYes })) },
     ],
     yDomain: [0, 1],
     yFmt: (v) => (v * 100).toFixed(0) + '%',
@@ -803,7 +826,7 @@ function renderCharts() {
 
   svgChart($('#chartDensity'), {
     series: [],
-    bars: { color: '#187354', points: a.density.map((p) => ({ x: p.strike, y: p.prob })) },
+    bars: { color: 'var(--green)', points: a.density.map((p) => ({ x: p.strike, y: p.prob })) },
     yFmt: (v) => (v * 100).toFixed(0) + '%',
     xFmt: eixoPreco,
     xLabel: 'faixa de preço no encerramento',
@@ -811,21 +834,25 @@ function renderCharts() {
 
   const edge = comModelo.filter((r) => r.mid > 0).map((r) => ({ x: r.strike, y: r.modelProbYes - r.mid }));
   svgChart($('#chartEdge'), {
-    series: [{ label: 'vantagem', color: '#896114', points: edge }],
+    series: [{ label: 'vantagem', color: 'var(--yellow)', points: edge }],
     yFmt: (v) => (v * 100).toFixed(0) + ' pt',
     xFmt: eixoPreco,
     xLabel: eixoX,
   });
 
-  if (!state.btc) {
-    api('/api/btc-history').then((r) => { state.btc = r.candles; drawBtc(); }).catch(() => {});
+  if (!state.btcFetchAt || Date.now() - state.btcFetchAt > 1000) {
+    state.btcFetchAt = Date.now();
+    api('/api/btc-history').then((r) => {
+      if (r.eventTicker !== state.analysis?.event?.eventTicker && r.eventTicker !== state.analysis?.event?.ticker) return;
+      state.btc = r.candles; drawBtc();
+    }).catch(() => {});
   } else drawBtc();
 }
 
 function drawBtc() {
   if (!state.btc) return;
   svgChart($('#chartBtc'), {
-    series: [{ label: 'preço do Bitcoin', color: '#896114', points: state.btc.map((c) => ({ x: c.ts, y: c.close })) }],
+    series: [{ label: 'preço do Bitcoin', color: 'var(--yellow)', points: state.btc.map((c) => ({ x: c.ts, y: c.close })) }],
     yFmt: eixoPreco,
     xFmt: (v) => new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     xLabel: 'horário',
@@ -843,7 +870,7 @@ function renderArb() {
   }
   $('#arbList').innerHTML = arb
     .map(
-      (x) => `<div class="row" style="padding:10px 0;border-bottom:1px solid #e7ebe9">
+      (x) => `<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line-soft)">
       <strong class="pos">ganha ${money(x.profitPerContract, 3)} por contrato, dê no que der</strong>
       <div>${x.label}</div>
       <div class="muted">${x.detail}</div>
@@ -983,8 +1010,9 @@ function renderSugestoes(s) {
           <div><label>Chance de acerto</label><strong>${pct(x.modelProb)}</strong></div>
           <div><label>Precisa de</label><strong>${pct(x.breakevenProb)}</strong></div>
           <div><label>Vantagem</label><strong class="${cls(x.edge)}">${pontos(x.edge)}</strong></div>
-          <div><label>Retorno esperado</label><strong class="${cls(x.evPct)}">${pct(x.evPct)}</strong></div>
-          <div><label>Ganha se acertar</label><strong class="pos">${money(x.contracts * (1 - x.price))}</strong></div>
+          <div><label>Retorno esperado (capital)</label><strong class="${cls(x.evPctCapital)}">${pct(x.evPctCapital)}</strong></div>
+          <div><label>Se ganhar (capital)</label><strong class="${cls(x.winReturnPctCapital)}">${pct(x.winReturnPctCapital)}</strong></div>
+          <div><label>Ganha se acertar</label><strong class="pos">${money(x.contracts - x.estimatedCost)}</strong></div>
           <div><label>Perde se errar</label><strong class="neg">${money(x.estimatedCost)}</strong></div>
         </div>
         ${
@@ -1119,11 +1147,10 @@ async function renderConfigTab() {
       const bal = p.balance && (p.balance.balance_dollars != null ? +p.balance.balance_dollars : p.balance.balance != null ? p.balance.balance / 100 : null);
       const pos = ((p.positions && p.positions.market_positions) || []).filter((x) => +x.position_fp !== 0);
       const emAberto = (p.orders && p.orders.orders) || [];
-      const fator = fatorCapital();
-      const ajustado = fator !== 1 ? ` <span class="muted">(ajustado ${fator >= 1 ? '+' : ''}${pct(fator - 1)})</span>` : '';
+
       $('#portfolioBox').innerHTML = `
         <div class="cards" style="margin-bottom:12px">
-          <div class="kpi"><label>Saldo disponível</label><strong>${bal != null ? money(bal * fator) : '—'}</strong>${ajustado ? `<span>${ajustado}</span>` : ''}</div>
+          <div class="kpi"><label>Saldo disponível</label><strong>${bal != null ? money(bal) : '—'}</strong></div>
           <div class="kpi"><label>Apostas em aberto</label><strong>${pos.length}</strong></div>
           <div class="kpi"><label>Ordens esperando</label><strong>${emAberto.length}</strong></div>
         </div>
@@ -1134,13 +1161,13 @@ async function renderConfigTab() {
           .map((x) => {
             const qtd = +x.position_fp;
             const lado = qtd > 0 ? 'yes' : 'no';
-            const pnl = +(x.realized_pnl_dollars || 0) * fator;
+            const pnl = +(x.realized_pnl_dollars || 0);
             return `<tr><td>${x.ticker}</td>
               <td><span class="pill ${lado}">${LADO[lado]}</span></td>
               <td>${Math.abs(qtd)}</td>
-              <td>${money(+(x.market_exposure_dollars || 0) * fator)}</td>
-              <td>${money(+(x.total_traded_dollars || 0) * fator)}</td>
-              <td>${money(+(x.fees_paid_dollars || 0) * fator)}</td>
+              <td>${money(+(x.market_exposure_dollars || 0))}</td>
+              <td>${money(+(x.total_traded_dollars || 0))}</td>
+              <td>${money(+(x.fees_paid_dollars || 0))}</td>
               <td class="${cls(pnl)}">${money(pnl)}</td></tr>`;
           })
           .join('') || '<tr><td colspan="7" class="muted">nenhuma aposta em aberto</td></tr>'}
@@ -1151,19 +1178,21 @@ async function renderConfigTab() {
   }
 }
 
+// Render expanded analysis only when it is visible, including after opening it.
+['marketQuotes', 'marketCharts', 'marketArbitrage'].forEach(id => {
+  $('#' + id).addEventListener('toggle', () => {
+    if ($('#' + id).open) renderPainelVisivel(true);
+  });
+});
 // ---------- eventos ----------
 $('#emptyPicker').addEventListener('click', () => $('#openPicker').click());
 $('#rankAdvanced').addEventListener('change', (event) => $('#rankTable').classList.toggle('expanded', event.target.checked));
 $('#marketAdvanced').addEventListener('change', (event) => $('#marketTable').classList.toggle('expanded', event.target.checked));
 function updatePageHeading(id) {
   const pages = {
-    resumo: ['Visão geral', 'Entenda o momento do mercado e compare as possibilidades.'],
-    ranking: ['Oportunidades', 'Compare probabilidades, custos e retorno estimado após as taxas.'],
-    mercados: ['Mercados', 'Explore as faixas de preço e consulte as ofertas de cada contrato.'],
-    curva: ['Análise gráfica', 'Veja como as expectativas do mercado se comparam ao modelo.'],
-    arb: ['Arbitragem', 'Avalie diferenças de preço entre combinações de contratos.'],
-    auto: ['Automação', 'Controle o modo de operação, revise sugestões e defina seus limites.'],
-    config: ['Configurações', 'Ajuste o modelo de análise e consulte os dados da sua conta.'],
+    resumo: ['Mercado', 'Compare oportunidades e abra os detalhes sem trocar de tela.'],
+    auto: ['Operações', 'Controle o modo de operação, revise sugestões e defina seus limites.'],
+    config: ['Ajustes', 'Ajuste o modelo de análise e consulte os dados da sua conta.'],
   };
   const [title, description] = pages[id] || pages.resumo;
   $('#pageTitle').textContent = title;
@@ -1176,10 +1205,6 @@ function updatePageHeading(id) {
   });
 }
 
-$$('[data-go]').forEach((button) => button.addEventListener('click', () => {
-  $(`.tab[data-tab="${button.dataset.go}"]`).click();
-  $('#pageTitle').scrollIntoView({ block: 'start' });
-}));
 $('.identity').addEventListener('click', (event) => {
   event.preventDefault();
   $('.tab[data-tab="resumo"]').click();
@@ -1319,24 +1344,15 @@ setInterval(() => {
 }, 3000);
 
 setInterval(() => {
-  if (abaAtual() === 'mercados' && state.faixaAberta) showMarketDetail(state.faixaAberta, true);
+  if (abaAtual() === 'resumo' && $('#marketQuotes').open && state.faixaAberta) showMarketDetail(state.faixaAberta, true);
 }, 1500);
 
 // ---------- CAPITAL ----------
-// O fator de valorização (atual / inicial) multiplica toda estatística de dinheiro do
-// painel (cards de resumo, saldo e resultado do portfólio). Com 1 (sem capital definido)
-// ele não muda nada.
-function fatorCapital() {
-  const c = state.capital;
-  if (!c || !c.inicial || !c.atual) return 1;
-  return c.atual / c.inicial;
-}
-
 function renderCapitalHeader() {
   const c = state.capital;
   const pctEl = $('#capitalPct');
   const detEl = $('#capitalDetail');
-  if (!c || !c.inicial || !c.atual) {
+  if (!c || !Number.isFinite(Number(c.inicial)) || Number(c.inicial) <= 0 || !Number.isFinite(Number(c.atual)) || Number(c.atual) < 0) {
     pctEl.textContent = '—';
     pctEl.className = '';
     detEl.textContent = 'defina seu capital inicial e atual';
